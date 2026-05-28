@@ -10,6 +10,7 @@
 # pip install streamlit-mic-recorder python-pptx python-docx
 # pip install reportlab pillow requests speechrecognition
 # pip install beautifulsoup4 lxml pandas youtube-transcript-api
+# pip install pytz
 
 # =========================================================
 # IMPORTS
@@ -44,6 +45,7 @@ import os
 import base64
 import datetime
 import urllib.parse
+import pytz
 
 # =========================================================
 # PAGE CONFIG - UPDATED WITH LOGO & NEW NAME
@@ -189,7 +191,6 @@ def get_live_search_data(query):
     }
 
   # 1. SMART DATE CONVERTER (IST Fix)
-    import pytz
     from datetime import datetime, timedelta
     
     # IST timezone define cheyyandi
@@ -360,7 +361,11 @@ else:
     # SIDEBAR - UPDATED WITH LOGO & TITLE
     # =====================================================
 
-    st.sidebar.image("logo.png", use_container_width=True) # Added Logo in Sidebar
+    try:
+        st.sidebar.image("logo.png", use_container_width=True) # Added Logo in Sidebar
+    except:
+        pass
+    
     st.sidebar.title("⚡ Sai's AI Universe")                 # Updated Title
 
     st.sidebar.write(
@@ -431,7 +436,9 @@ else:
 
     if menu == "🏠 Dashboard":
         
-        current_hour = datetime.datetime.now().hour
+        # INDIAN TIMEZONE FIX FOR GREETING
+        ist = pytz.timezone('Asia/Kolkata')
+        current_hour = datetime.datetime.now(ist).hour
         
         if current_hour < 12:
             greeting = "Good morning"
@@ -614,7 +621,10 @@ else:
                     full_response = ""
                     
                     try:
-                        system_prompt = f"You are a helpful AI assistant. Today's date is {datetime.date.today()}. CRITICAL FACT: N. Chandrababu Naidu is the Chief Minister of Andhra Pradesh. STRICT RULE: When web data is provided, use ONLY that web data to answer. If web data contradicts the critical fact, the critical fact takes priority."
+                        ist = pytz.timezone('Asia/Kolkata')
+                        current_date_str = datetime.datetime.now(ist).strftime("%B %d, %Y")
+                        
+                        system_prompt = f"You are a helpful and polite AI assistant. Today's date is {current_date_str}. CRITICAL FACT: N. Chandrababu Naidu is the Chief Minister of Andhra Pradesh. STRICT RULE: When answering, provide full names and formal responses. If web data contradicts the critical fact, the critical fact takes priority."
                         
                         api_messages = [{"role": "system", "content": system_prompt}]
                         
@@ -624,7 +634,7 @@ else:
                             
                             if is_last_message and use_google:
                                 if google_context.strip():
-                                    inject_text = f"\n\n--- LATEST WEB DATA ---\n{google_context}\n\nCRITICAL RULE: Answer the user's query using ONLY the facts from the web data above. DO NOT say 'According to the web data' or 'Based on search'. Just give the direct factual answer."
+                                    inject_text = f"\n\n--- LATEST WEB DATA ---\n{google_context}\n\nCRITICAL RULE: Answer the user's query using the facts from the web data above. DO NOT say 'According to the web data' or 'Based on search'. Just give the direct factual answer naturally."
                                 else:
                                     inject_text = f"\n\nCRITICAL RULE: Provide the best factual answer from your internal knowledge. DO NOT mention that you could not search the web. Just answer naturally."
                                     
@@ -1028,6 +1038,23 @@ else:
 
                         content_box.text = slide_data
 
+                        image_url = f"https://image.pollinations.ai/prompt/{ppt_topic}"
+
+                        response = requests.get(image_url)
+
+                        image_path = "ppt_image.jpg"
+
+                        with open(image_path, "wb") as f:
+
+                            f.write(response.content)
+
+                        slide.shapes.add_picture(
+                            image_path,
+                            Inches(5.5),
+                            Inches(1.5),
+                            width=Inches(3)
+                        )
+
                 ppt_file = f"{ppt_topic}.pptx"
 
                 prs.save(ppt_file)
@@ -1229,7 +1256,7 @@ else:
                     for fname, fdata in saved_files:
 
                         st.download_button(
-                            label="⬇ Download {fname}", 
+                            label=f"⬇ Download {fname}", 
                             data=fdata, 
                             file_name=fname
                         )
