@@ -1,5 +1,5 @@
 # =========================================================
-# SAI AI UNIVERSE - COMPLETE ULTRA AI PLATFORM
+# SAI'S AI UNIVERSE - COMPLETE ULTRA AI PLATFORM
 # =========================================================
 
 # =========================================================
@@ -46,12 +46,12 @@ import datetime
 import urllib.parse
 
 # =========================================================
-# PAGE CONFIG
+# PAGE CONFIG - UPDATED WITH LOGO & NEW NAME
 # =========================================================
 
 st.set_page_config(
-    page_title="Sai AI Universe",
-    page_icon="🌌",
+    page_title="Sai's AI Universe",  # Updated Name
+    page_icon="logo.png",           # Updated Logo File
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -261,9 +261,10 @@ if not st.session_state.logged_in:
     l_col, r_col, _ = st.columns([1.2, 1, 0.2])
     
     with l_col:
+        # UPDATED LOGIN SCREEN TITLE
         st.markdown("""
         <div class="login-left">
-            <h1 style="font-size: 3.2rem; line-height: 1.2;">Welcome to <br><span style="color: #6C63FF;">Sai's Universe AI</span></h1>
+            <h1 style="font-size: 3.2rem; line-height: 1.2;">Welcome to <br><span style="color: #6C63FF;">Sai's AI Universe</span></h1>
             <p style="color: #A0A4B8; font-size: 1.2rem; margin-top: 15px;">Intelligent, secure, and built to help you achieve more every single day.</p>
         </div>
         """, unsafe_allow_html=True)
@@ -346,10 +347,11 @@ if not st.session_state.logged_in:
 else:
 
     # =====================================================
-    # SIDEBAR
+    # SIDEBAR - UPDATED WITH LOGO & TITLE
     # =====================================================
 
-    st.sidebar.title("⚡ Sai AI Universe")
+    st.sidebar.image("logo.png", use_container_width=True) # Added Logo in Sidebar
+    st.sidebar.title("⚡ Sai's AI Universe")                 # Updated Title
 
     st.sidebar.write(
         f"Welcome {st.session_state.username}"
@@ -362,6 +364,8 @@ else:
         st.rerun()
         
     st.sidebar.markdown("---")
+
+ 
 
     model = st.sidebar.selectbox(
         "Choose Model",
@@ -1215,7 +1219,7 @@ else:
                     for fname, fdata in saved_files:
 
                         st.download_button(
-                            label=f"⬇ Download {fname}", 
+                            label="⬇ Download {fname}", 
                             data=fdata, 
                             file_name=fname
                         )
