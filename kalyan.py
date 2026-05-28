@@ -188,11 +188,19 @@ def get_live_search_data(query):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-   # 1. SMART DATE CONVERTER (IST Fix)
-    import pytz 
+  # 1. SMART DATE CONVERTER (IST Fix)
+    import pytz
+    from datetime import datetime, timedelta
+    
+    # IST timezone define cheyyandi
     ist = pytz.timezone('Asia/Kolkata')
-    today = datetime.datetime.now(ist).date()
-    yesterday = today - datetime.timedelta(days=1)
+    
+    # UTC time ni teesukuni, danni IST ki convert cheyyali
+    now_utc = datetime.now(pytz.utc)
+    now_ist = now_utc.astimezone(ist)
+    
+    today = now_ist.date()
+    yesterday = today - timedelta(days=1)
     
     search_query = query.lower()
     if "yesterday" in search_query or "yesterdays" in search_query:
