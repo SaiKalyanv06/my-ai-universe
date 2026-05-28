@@ -10,7 +10,7 @@
 # pip install streamlit-mic-recorder python-pptx python-docx
 # pip install reportlab pillow requests speechrecognition
 # pip install beautifulsoup4 lxml pandas youtube-transcript-api
-# pip install pytz
+# pip install pytz extra-streamlit-components
 
 # =========================================================
 # IMPORTS
@@ -46,6 +46,7 @@ import base64
 import datetime
 import urllib.parse
 import pytz
+import extra_streamlit_components as stx
 
 # =========================================================
 # PAGE CONFIG - UPDATED WITH LOGO & NEW NAME
@@ -126,9 +127,7 @@ load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
 
 if not api_key:
-
     st.error("Please Add GROQ_API_KEY In .env File")
-
     st.stop()
 
 # =========================================================
@@ -175,10 +174,16 @@ conn.commit()
 # =========================================================
 
 def hash_password(password):
-
     return hashlib.sha256(
         password.encode()
     ).hexdigest()
+
+# =========================================================
+# COOKIE MANAGER FOR PERSISTENT LOGIN 
+# =========================================================
+
+cookie_manager = stx.CookieManager(key="cookie_manager")
+cookies_ready = cookie_manager.get_all()
 
 # =========================================================
 # WORLDWIDE LIVE SEARCH (PERFECT FIX)
@@ -190,7 +195,7 @@ def get_live_search_data(query):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-  # 1. SMART DATE CONVERTER (IST Fix)
+    # 1. SMART DATE CONVERTER (IST Fix)
     from datetime import datetime, timedelta
     
     # IST timezone define cheyyandi
@@ -258,13 +263,22 @@ def get_live_search_data(query):
 if "menu" not in st.session_state:
     st.session_state.menu = "🏠 Dashboard"
 
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+# =========================================================
+# AUTO-LOGIN PROCESS (PERSISTENT LOGIN)
+# =========================================================
+
+# 1. Check if cookie already exists
+if not st.session_state.logged_in:
+    if "saved_username" in cookies_ready:
+        st.session_state.logged_in = True
+        st.session_state.username = cookies_ready["saved_username"]
+
 # =========================================================
 # LOGIN SYSTEM (SIDE-BY-SIDE PRO UI)
 # =========================================================
-
-if "logged_in" not in st.session_state:
-
-    st.session_state.logged_in = False
 
 if not st.session_state.logged_in:
 
@@ -339,12 +353,17 @@ if not st.session_state.logged_in:
 
                 if result:
 
+                    import datetime as dt
+                    cookie_manager.set("saved_username", username, expires_at=dt.datetime.now() + dt.timedelta(days=30))
+
                     st.session_state.logged_in = True
 
                     st.session_state.username = username
 
-                    st.success("Login Successful")
-
+                    st.success("Login Successful!")
+                    
+                    import time
+                    time.sleep(1)
                     st.rerun()
 
                 else:
@@ -366,7 +385,7 @@ else:
     except:
         pass
     
-    st.sidebar.title("⚡ Sai's AI Universe")                 # Updated Title
+    st.sidebar.title("⚡ Sai's AI Universe")                # Updated Title
 
     st.sidebar.write(
         f"Welcome {st.session_state.username}"
@@ -380,7 +399,6 @@ else:
         
     st.sidebar.markdown("---")
 
- 
 
     model = st.sidebar.selectbox(
         "Choose Model",
@@ -518,6 +536,8 @@ else:
                         for item in msg["content"]:
                             if item["type"] == "text":
                                 st.markdown(item["text"])
+                            elif item["type"] == "image_url":
+                                st.image(item["image_url"]["url"])
                     else:
                         st.markdown(msg["content"])
 
@@ -527,166 +547,230 @@ else:
                 key="mic"
             )
 
-            chat_col1, chat_col2, chat_col3 = st.columns([1, 1.5, 9.5])
+            # GEMINI STYLE UI REDESIGN (Right aligned plus button)
+            action_col1, action_col2 = st.columns([15, 1])
 
-            with chat_col1:
-
-                with st.popover("➕"):
-                    choice = st.radio("Select Attachment Type", ["None", "📸 Camera", "🖼️ Photos", "📁 Files"], horizontal=True)
+            with action_col2:
+                with st.popover("➕"):  
+                    st.markdown("**🛠️ Tools & Attachments**")
+                    use_google = st.toggle("🌐 Web Search")
+                    st.divider()
+                    
+                    attach_opt = st.radio("Attachment:", ["❌ None", "📁 Upload File", "📸 Open Camera"])
+                    
                     attached_text = ""
                     attached_image_b64 = None
                     
-                    if choice == "📸 Camera":
-                        cam_file = st.camera_input("Capture Image")
-                        if cam_file:
-                            st.image(cam_file, width=200)
-                            cam_file.seek(0)
-                            attached_image_b64 = base64.b64encode(cam_file.read()).decode('utf-8')
-                            
-                    elif choice == "🖼️ Photos":
-                        photo_file = st.file_uploader("Choose Photo", type=["png", "jpg", "jpeg"])
-                        if photo_file:
-                            st.image(photo_file, width=200)
-                            photo_file.seek(0)
-                            attached_image_b64 = base64.b64encode(photo_file.read()).decode('utf-8')
-                            
-                    elif choice == "📁 Files":
-                        doc_file = st.file_uploader("Choose Document", type=["txt", "pdf", "csv"])
+                    if attach_opt == "📁 Upload File":
+                        doc_file = st.file_uploader("Upload File", type=["png", "jpg", "jpeg", "txt", "pdf", "csv"])
                         if doc_file:
-                            if doc_file.name.endswith(".txt"):
+                            if doc_file.name.endswith((".png", ".jpg", ".jpeg")):
+                                st.image(doc_file, width=200)
+                                doc_file.seek(0)
+                                attached_image_b64 = base64.b64encode(doc_file.read()).decode('utf-8')
+                                st.success("Attached!")
+                            elif doc_file.name.endswith(".txt"):
                                 attached_text = f"\n\n[Attached File Content]:\n" + doc_file.read().decode("utf-8")
-                                st.success(f"Attached Text File: {doc_file.name}")
+                                st.success("Attached!")
                             elif doc_file.name.endswith(".pdf"):
                                 try:
                                     pdf_reader = PdfReader(doc_file)
                                     pdf_text = "".join([page.extract_text() for page in pdf_reader.pages if page.extract_text()])
                                     attached_text = f"\n\n[Attached PDF Content]:\n" + pdf_text[:4000]
-                                    st.success(f"Attached PDF File: {doc_file.name}")
+                                    st.success("Attached!")
                                 except Exception as e:
                                     st.error(f"PDF Error: {e}")
                             elif doc_file.name.endswith(".csv"):
                                 try:
                                     df_chat = pd.read_csv(doc_file)
                                     attached_text = f"\n\n[Attached CSV Data Sample]:\n" + df_chat.head(5).to_string()
-                                    st.success(f"Attached CSV File: {doc_file.name}")
+                                    st.success("Attached!")
                                 except Exception as e:
                                     st.error(f"CSV Error: {e}")
+                                    
+                    elif attach_opt == "📸 Open Camera":
+                        st.info("💡 Camera is ON. Select 'None' to save battery.")
+                        cam_file = st.camera_input("Take a photo")
+                        if cam_file:
+                            st.image(cam_file, width=200)
+                            cam_file.seek(0)
+                            attached_image_b64 = base64.b64encode(cam_file.read()).decode('utf-8')
+                            st.success("Photo attached!")
 
-            with chat_col2:
-                use_google = st.toggle("🌐 Google")
-
-            with chat_col3:
-                prompt = st.chat_input("Ask Anything")
+            # The chat input sits cleanly below the right-aligned button
+            prompt = st.chat_input("Ask Anything...")
 
             if prompt:
-
-                google_context = ""
-                if use_google:
-                    with st.spinner("Searching the Web Worldwide..."):
-                        google_context = get_live_search_data(prompt)
-
-                final_content = prompt + attached_text
-
-                if attached_image_b64:
+                
+                # --- NEW FEATURE: AI IMAGE EDITING VIA PROMPT ---
+                is_edit_request = attached_image_b64 and any(word in prompt.lower() for word in ["edit", "change", "make it", "filter", "black and white", "blur", "bright", "dark"])
+                
+                if is_edit_request:
                     user_message = {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": final_content},
+                            {"type": "text", "text": prompt},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{attached_image_b64}"}}
                         ]
                     }
-                    chat_model = "meta-llama/llama-4-scout-17b-16e-instruct"
-                else:
-                    user_message = {
-                        "role": "user",
-                        "content": final_content
-                    }
-                    chat_model = model
-
-                st.session_state.messages.append(user_message)
-
-                with st.chat_message("user"):
-
-                    st.markdown(prompt)
-                    if attached_image_b64:
-                        st.caption("📸 Image Attached")
-                    if attached_text:
-                        st.caption("📁 Document Attached")
-                    if use_google and google_context:
-                        st.caption("🌐 Used Live Search Data")
-
-                with st.chat_message("assistant"):
-
-                    placeholder = st.empty()
-                    full_response = ""
+                    st.session_state.messages.append(user_message)
                     
-                    try:
-                        ist = pytz.timezone('Asia/Kolkata')
-                        current_date_str = datetime.datetime.now(ist).strftime("%B %d, %Y")
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
+                        st.caption("📸 Image Attached for Editing")
                         
-                        system_prompt = f"You are a helpful and polite AI assistant. Today's date is {current_date_str}. CRITICAL FACT: N. Chandrababu Naidu is the Chief Minister of Andhra Pradesh. STRICT RULE: When answering, provide full names and formal responses. If web data contradicts the critical fact, the critical fact takes priority."
-                        
-                        api_messages = [{"role": "system", "content": system_prompt}]
-                        
-                        for idx, m in enumerate(st.session_state.messages):
-                            is_last_message = (idx == len(st.session_state.messages) - 1)
-                            inject_text = ""
+                    with st.chat_message("assistant"):
+                        st.markdown("🎨 Processing your image edit request...")
+                        try:
+                            import io
+                            from PIL import Image, ImageFilter, ImageEnhance
                             
-                            if is_last_message and use_google:
-                                if google_context.strip():
-                                    inject_text = f"\n\n--- LATEST WEB DATA ---\n{google_context}\n\nCRITICAL RULE: Answer the user's query using the facts from the web data above. DO NOT say 'According to the web data' or 'Based on search'. Just give the direct factual answer naturally."
-                                else:
-                                    inject_text = f"\n\nCRITICAL RULE: Provide the best factual answer from your internal knowledge. DO NOT mention that you could not search the web. Just answer naturally."
-                                    
-                            if isinstance(m["content"], list):
-                                if chat_model != "meta-llama/llama-4-scout-17b-16e-instruct":
-                                    text_only = ""
-                                    for item in m["content"]:
-                                        if item["type"] == "text":
-                                            text_only = item["text"]
-                                    text_only += inject_text
-                                    api_messages.append({"role": m["role"], "content": text_only})
-                                else:
-                                    temp_m = m.copy()
-                                    if inject_text:
-                                        new_content = []
-                                        for item in temp_m["content"]:
-                                            if item["type"] == "text":
-                                                new_content.append({"type": "text", "text": item["text"] + inject_text})
-                                            else:
-                                                new_content.append(item)
-                                        temp_m["content"] = new_content
-                                    api_messages.append(temp_m)
+                            img_data = base64.b64decode(attached_image_b64)
+                            img = Image.open(io.BytesIO(img_data))
+                            
+                            # Simple logic to apply edits based on the prompt
+                            if "black and white" in prompt.lower() or "grayscale" in prompt.lower():
+                                img = img.convert("L")
+                            elif "blur" in prompt.lower():
+                                img = img.filter(ImageFilter.BLUR)
+                            elif "bright" in prompt.lower():
+                                enhancer = ImageEnhance.Brightness(img)
+                                img = enhancer.enhance(1.5)
+                            elif "dark" in prompt.lower():
+                                enhancer = ImageEnhance.Brightness(img)
+                                img = enhancer.enhance(0.5)
                             else:
-                                temp_content = m["content"]
-                                temp_content += inject_text
-                                api_messages.append({"role": m["role"], "content": temp_content})
+                                st.warning("⚠️ For advanced edits (like changing backgrounds), paid APIs are needed. Applied Auto-Enhance instead!")
+                                enhancer = ImageEnhance.Color(img)
+                                img = enhancer.enhance(1.5)
+                                
+                            buf = io.BytesIO()
+                            img.save(buf, format="PNG")
+                            edited_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+                            
+                            st.image(img, caption="Edited Result", use_container_width=True)
+                            
+                            st.session_state.messages.append(
+                                {
+                                    "role": "assistant",
+                                    "content": [
+                                        {"type": "text", "text": "Here is your edited image!"},
+                                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{edited_b64}"}}
+                                    ]
+                                }
+                            )
+                        except Exception as e:
+                            st.error(f"Failed to edit image: {e}")
+                            
+                else:
+                    # --- NORMAL CHAT LOGIC ---
+                    google_context = ""
+                    if 'use_google' in locals() and use_google:
+                        with st.spinner("Searching the Web Worldwide..."):
+                            google_context = get_live_search_data(prompt)
 
-                        response = client.chat.completions.create(
-                            model=chat_model,
-                            messages=api_messages,
-                            temperature=0.2 if use_google else temperature, 
-                            stream=True
-                        )
+                    final_content = prompt + attached_text
 
-                        for chunk in response:
-                            if chunk.choices[0].delta.content:
-                                content = chunk.choices[0].delta.content
-                                full_response += content
-                                placeholder.markdown(full_response + "▌")
-
-                        placeholder.markdown(full_response)
-                        
-                    except Exception as e:
-                        full_response = f"API Error: {e}"
-                        placeholder.markdown(full_response)
-
-                    st.session_state.messages.append(
-                        {
-                            "role": "assistant",
-                            "content": full_response
+                    if attached_image_b64:
+                        user_message = {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": final_content},
+                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{attached_image_b64}"}}
+                            ]
                         }
-                    )
+                        chat_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+                    else:
+                        user_message = {
+                            "role": "user",
+                            "content": final_content
+                        }
+                        chat_model = model
+
+                    st.session_state.messages.append(user_message)
+
+                    with st.chat_message("user"):
+
+                        st.markdown(prompt)
+                        if attached_image_b64:
+                            st.caption("📸 Image Attached")
+                        if attached_text:
+                            st.caption("📁 Document Attached")
+                        if 'use_google' in locals() and use_google and google_context:
+                            st.caption("🌐 Used Live Search Data")
+
+                    with st.chat_message("assistant"):
+
+                        placeholder = st.empty()
+                        full_response = ""
+                        
+                        try:
+                            ist = pytz.timezone('Asia/Kolkata')
+                            current_date_str = datetime.datetime.now(ist).strftime("%B %d, %Y")
+                            
+                            system_prompt = f"You are a helpful and polite AI assistant. Today's date is {current_date_str}. CRITICAL FACT: N. Chandrababu Naidu is the Chief Minister of Andhra Pradesh. STRICT RULE: When answering, provide full names and formal responses. If web data contradicts the critical fact, the critical fact takes priority."
+                            
+                            api_messages = [{"role": "system", "content": system_prompt}]
+                            
+                            for idx, m in enumerate(st.session_state.messages):
+                                is_last_message = (idx == len(st.session_state.messages) - 1)
+                                inject_text = ""
+                                
+                                if is_last_message and 'use_google' in locals() and use_google:
+                                    if google_context.strip():
+                                        inject_text = f"\n\n--- LATEST WEB DATA ---\n{google_context}\n\nCRITICAL RULE: Answer the user's query using the facts from the web data above. DO NOT say 'According to the web data' or 'Based on search'. Just give the direct factual answer naturally."
+                                    else:
+                                        inject_text = f"\n\nCRITICAL RULE: Provide the best factual answer from your internal knowledge. DO NOT mention that you could not search the web. Just answer naturally."
+                                        
+                                if isinstance(m["content"], list):
+                                    if chat_model != "meta-llama/llama-4-scout-17b-16e-instruct":
+                                        text_only = ""
+                                        for item in m["content"]:
+                                            if item["type"] == "text":
+                                                text_only = item["text"]
+                                        text_only += inject_text
+                                        api_messages.append({"role": m["role"], "content": text_only})
+                                    else:
+                                        temp_m = m.copy()
+                                        if inject_text:
+                                            new_content = []
+                                            for item in temp_m["content"]:
+                                                if item["type"] == "text":
+                                                    new_content.append({"type": "text", "text": item["text"] + inject_text})
+                                                else:
+                                                    new_content.append(item)
+                                            temp_m["content"] = new_content
+                                        api_messages.append(temp_m)
+                                else:
+                                    temp_content = m["content"]
+                                    temp_content += inject_text
+                                    api_messages.append({"role": m["role"], "content": temp_content})
+
+                            response = client.chat.completions.create(
+                                model=chat_model,
+                                messages=api_messages,
+                                temperature=0.2 if ('use_google' in locals() and use_google) else temperature, 
+                                stream=True
+                            )
+
+                            for chunk in response:
+                                if chunk.choices[0].delta.content:
+                                    content = chunk.choices[0].delta.content
+                                    full_response += content
+                                    placeholder.markdown(full_response + "▌")
+
+                            placeholder.markdown(full_response)
+                            
+                        except Exception as e:
+                            full_response = f"API Error: {e}"
+                            placeholder.markdown(full_response)
+
+                        st.session_state.messages.append(
+                            {
+                                "role": "assistant",
+                                "content": full_response
+                            }
+                        )
 
         # =====================================================
         # CODING ASSISTANT
@@ -1513,5 +1597,6 @@ else:
     if st.sidebar.button("Logout"):
 
         st.session_state.logged_in = False
+        cookie_manager.delete("saved_username") # Deleting Cookie on Logout
 
         st.rerun()
