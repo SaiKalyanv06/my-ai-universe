@@ -1,0 +1,17 @@
+streamlit
+groq
+python-dotenv
+PyPDF2
+gtts
+streamlit-mic-recorder
+python-pptx
+python-docx
+reportlab
+pillow
+requests
+speechrecognition
+beautifulsoup4
+lxml
+pandas
+youtube-transcript-api
+duckduckGo-Search
