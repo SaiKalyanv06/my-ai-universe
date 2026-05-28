@@ -9,10 +9,10 @@ python-docx
 reportlab
 pillow
 requests
-speechrecognition
+SpeechRecognition
 beautifulsoup4
 lxml
 pandas
 youtube-transcript-api
-duckduckgo-search
 pytz
+extra-streamlit-components
