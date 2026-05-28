@@ -188,8 +188,10 @@ def get_live_search_data(query):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    # 1. SMART DATE CONVERTER
-    today = datetime.date.today()
+   # 1. SMART DATE CONVERTER (IST Fix)
+    import pytz 
+    ist = pytz.timezone('Asia/Kolkata')
+    today = datetime.datetime.now(ist).date()
     yesterday = today - datetime.timedelta(days=1)
     
     search_query = query.lower()
@@ -197,7 +199,7 @@ def get_live_search_data(query):
         search_query = search_query.replace("yesterdays", yesterday.strftime("%B %d, %Y")).replace("yesterday", yesterday.strftime("%B %d, %Y"))
     if "today" in search_query or "todays" in search_query:
         search_query = search_query.replace("todays", today.strftime("%B %d, %Y")).replace("today", today.strftime("%B %d, %Y"))
-
+        
     # Layer 1: DuckDuckGo Lite
     try:
         url = "https://lite.duckduckgo.com/lite/"
