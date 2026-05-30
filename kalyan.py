@@ -30,7 +30,6 @@ from docx import Document
 from reportlab.pdfgen import canvas
 
 from PIL import Image
-
 from bs4 import BeautifulSoup
 
 import speech_recognition as sr
@@ -47,59 +46,96 @@ import datetime
 import urllib.parse
 import pytz
 import extra_streamlit_components as stx
+import json
+import time
 
 # =========================================================
-# PAGE CONFIG - UPDATED WITH LOGO & NEW NAME
+# PAGE CONFIG - UPDATED
 # =========================================================
 
 st.set_page_config(
-    page_title="Sai's AI Universe",  # Updated Name
-    page_icon="logo.png",           # Updated Logo File
+    page_title="Sai's AI Universe",  
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =========================================================
-# CUSTOM CSS (PRO UI FROM PHOTOS)
+# CUSTOM CSS (TWINKLING STARS & ORBITRON FONT)
 # =========================================================
 
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Inter:wght@300;400;600;700;800&display=swap');
 
+/* --- Twinkling Stars Background --- */
 .stApp {
-    background-color: #0B0F19;
+    background-color: #010204;
+    background-image: 
+        radial-gradient(white, rgba(255,255,255,.1) 1.5px, transparent 2px), 
+        radial-gradient(white, rgba(255,255,255,.07) 1px, transparent 1.5px), 
+        radial-gradient(rgba(108, 99, 255, 0.05) 15%, transparent 60%); 
+    background-size: 550px 550px, 350px 350px, 100% 100%;
+    background-position: 0 0, 40px 60px, 0 0;
     color: #FFFFFF;
     font-family: 'Inter', sans-serif;
+    perspective: 2000px; overflow-x: hidden;
+    animation: realGalaxyMove 60s linear infinite;
 }
+
+.stApp::before {
+    content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: radial-gradient(circle at 15% 25%, rgba(108, 99, 255, 0.15), transparent 35%),
+                radial-gradient(circle at 85% 75%, rgba(138, 43, 226, 0.12), transparent 35%);
+    z-index: -2;
+    animation: nebulaTwist 120s ease-in-out infinite;
+}
+
+.stApp::after {
+    content: ""; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background-image: radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 3px);
+    background-size: 650px 650px;
+    z-index: -1;
+    animation: twinkling 4s ease-in-out infinite; opacity: 0.8;
+}
+
+@keyframes realGalaxyMove { from { background-position: 0 0, 40px 60px, 0 0; } to { background-position: 550px 550px, 390px 410px, 0 0; } }
+@keyframes nebulaTwist { 0% { transform: rotate(0deg); } 50% { transform: rotate(2deg) scale(1.05); } 100% { transform: rotate(0deg); } }
+@keyframes twinkling { 0% { opacity: 0.3; } 50% { opacity: 1.0; } 100% { opacity: 0.3; } }
+
+/* Fonts for Headings */
+h1, h2, h3 { font-family: 'Orbitron', sans-serif !important; color: #FFFFFF !important; }
+h4, h5, h6, p, label { color: #E2E8F0 !important; }
+
 [data-testid="stSidebar"] {
-    background-color: #0E121D !important;
-    border-right: 1px solid #1F2433 !important;
+    background-color: rgba(14, 18, 29, 0.8) !important;
+    backdrop-filter: blur(15px);
+    border-right: 1px solid rgba(255,255,255,0.05) !important;
 }
-h1, h2, h3, h4, h5, h6, p, label {
-    color: #FFFFFF !important;
-}
+
 .tool-card {
-    background: #161B2A;
-    border: 1px solid #23293B;
-    border-radius: 16px;
-    padding: 25px;
-    text-align: left;
-    transition: all 0.3s ease;
-    cursor: pointer;
+    background: rgba(22, 27, 42, 0.6); 
+    backdrop-filter: blur(10px); 
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px; 
+    padding: 25px; 
+    text-align: left; 
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    cursor: pointer; 
     height: 100%;
+    transform-style: preserve-3d;
+    perspective: 1000px;
 }
 .tool-card:hover {
-    border-color: #6C63FF;
-    transform: translateY(-5px);
-    box-shadow: 0 10px 20px rgba(108, 99, 255, 0.1);
+    border-color: #6C63FF; 
+    transform: translateY(-10px) rotateX(6deg) rotateY(-4deg) scale(1.03); 
+    box-shadow: -10px 15px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(108, 99, 255, 0.4);
 }
+
 .login-left {
-    background: #11141B;
-    padding: 60px;
-    border-radius: 20px;
-    border: 1px solid #1F2433;
+    background: rgba(14, 16, 26, 0.9); backdrop-filter: blur(10px); padding: 60px;
+    border-radius: 24px; border: 1px solid #2A2E3F;
 }
+
 .stButton button {
     background: linear-gradient(135deg, #6C63FF 0%, #8B5CF6 100%) !important;
     border-radius: 10px !important;
@@ -110,8 +146,8 @@ h1, h2, h3, h4, h5, h6, p, label {
     width: 100%;
 }
 .stTextInput input, .stTextArea textarea, .stSelectbox > div > div {
-    background-color: #161B2A !important;
-    border: 1px solid #23293B !important;
+    background-color: rgba(22, 27, 42, 0.7) !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
     border-radius: 10px !important;
     color: white !important;
 }
@@ -129,6 +165,11 @@ api_key = os.getenv("GROQ_API_KEY")
 if not api_key:
     st.error("Please Add GROQ_API_KEY In .env File")
     st.stop()
+
+# --- GOOGLE AUTH CREDENTIALS ---
+g_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip().strip('"').strip("'")
+g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip().strip('"').strip("'")
+redirect_url = os.getenv("REDIRECT_URI", "http://localhost:8501/").strip().strip('"').strip("'")
 
 # =========================================================
 # CONNECT GROQ
@@ -186,7 +227,7 @@ cookie_manager = stx.CookieManager(key="cookie_manager")
 cookies_ready = cookie_manager.get_all()
 
 # =========================================================
-# WORLDWIDE LIVE SEARCH (PERFECT FIX)
+# WORLDWIDE LIVE SEARCH 
 # =========================================================
 
 def get_live_search_data(query):
@@ -195,13 +236,9 @@ def get_live_search_data(query):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    # 1. SMART DATE CONVERTER (IST Fix)
     from datetime import datetime, timedelta
-    
-    # IST timezone define cheyyandi
     ist = pytz.timezone('Asia/Kolkata')
     
-    # UTC time ni teesukuni, danni IST ki convert cheyyali
     now_utc = datetime.now(pytz.utc)
     now_ist = now_utc.astimezone(ist)
     
@@ -214,7 +251,6 @@ def get_live_search_data(query):
     if "today" in search_query or "todays" in search_query:
         search_query = search_query.replace("todays", today.strftime("%B %d, %Y")).replace("today", today.strftime("%B %d, %Y"))
         
-    # Layer 1: DuckDuckGo Lite
     try:
         url = "https://lite.duckduckgo.com/lite/"
         data = {"q": search_query}
@@ -229,7 +265,6 @@ def get_live_search_data(query):
     except:
         pass
 
-    # Layer 2: Google Search Scrape
     try:
         google_url = f"https://www.google.com/search?q={urllib.parse.quote(search_query)}"
         res = requests.get(google_url, headers=headers, timeout=6)
@@ -243,7 +278,6 @@ def get_live_search_data(query):
     except:
         pass
 
-    # Layer 3: Wikipedia Fallback
     try:
         wiki_url = f"https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={urllib.parse.quote(search_query)}&utf8=&format=json"
         wiki_res = requests.get(wiki_url, timeout=5).json()
@@ -257,7 +291,7 @@ def get_live_search_data(query):
     return context
 
 # =========================================================
-# STATE MANAGEMENT FOR MENU
+# STATE MANAGEMENT FOR MENU 
 # =========================================================
 
 if "menu" not in st.session_state:
@@ -265,28 +299,79 @@ if "menu" not in st.session_state:
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+    
+if "logout_triggered" not in st.session_state:
+    st.session_state.logout_triggered = False
 
 # =========================================================
 # AUTO-LOGIN PROCESS (PERSISTENT LOGIN)
 # =========================================================
 
-# 1. Check if cookie already exists
 if not st.session_state.logged_in:
-    if "saved_username" in cookies_ready:
+    if "saved_username" in cookies_ready and cookies_ready["saved_username"] and not st.session_state.logout_triggered:
         st.session_state.logged_in = True
         st.session_state.username = cookies_ready["saved_username"]
 
 # =========================================================
-# LOGIN SYSTEM (SIDE-BY-SIDE PRO UI)
+# LOGIN SYSTEM (HTML META REFRESH - THE NUCLEAR OPTION)
 # =========================================================
 
 if not st.session_state.logged_in:
 
+    # 1. Safely extract Code
+    auth_code = None
+    try:
+        if "code" in st.query_params:
+            auth_code = st.query_params.get("code")
+    except:
+        try:
+            params = st.experimental_get_query_params()
+            if "code" in params:
+                auth_code = params["code"][0]
+        except:
+            pass
+
+    # 2. Process Login Code
+    if auth_code:
+        # Prevent loop: If we already saw this code, immediately clean the URL via HTML
+        if st.session_state.get("used_google_code") == auth_code:
+            st.markdown('<meta http-equiv="refresh" content="0; url=/">', unsafe_allow_html=True)
+            st.stop()
+
+        # Mark this code as used
+        st.session_state.used_google_code = auth_code
+
+        with st.spinner("Authenticating with Google... 🚀"):
+            try:
+                token_res = requests.post("https://oauth2.googleapis.com/token", data={
+                    "code": auth_code,
+                    "client_id": g_client_id,
+                    "client_secret": g_client_secret,
+                    "redirect_uri": redirect_url,
+                    "grant_type": "authorization_code"
+                }).json()
+                
+                if "access_token" in token_res:
+                    user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {token_res['access_token']}"}).json()
+                    
+                    st.session_state.logged_in = True
+                    st.session_state.username = user_res.get("name", "Google User")
+                    st.session_state.logout_triggered = False 
+                    
+                    # NUCLEAR OPTION: Pure HTML Redirect to base URL (wipes out the code)
+                    st.markdown('<meta http-equiv="refresh" content="0; url=/">', unsafe_allow_html=True)
+                    st.stop()
+                else:
+                    if token_res.get("error") != "invalid_grant":
+                        st.error(f"Login Error: {token_res}")
+            except Exception as e:
+                st.error(f"Network Error: {e}")
+
+    # --- NORMAL LOGIN UI ---
     st.markdown("<br><br>", unsafe_allow_html=True)
     l_col, r_col, _ = st.columns([1.2, 1, 0.2])
     
     with l_col:
-        # UPDATED LOGIN SCREEN TITLE
         st.markdown("""
         <div class="login-left">
             <h1 style="font-size: 3.2rem; line-height: 1.2;">Welcome to <br><span style="color: #6C63FF;">Sai's AI Universe</span></h1>
@@ -297,78 +382,52 @@ if not st.session_state.logged_in:
     with r_col:
         st.markdown("<h2>Welcome back</h2><p style='color: #A0A4B8;'>Sign in to your account to continue</p>", unsafe_allow_html=True)
 
-        auth_option = st.radio(
-            "Choose Option",
-            [
-                "Login",
-                "Signup"
-            ],
-            horizontal=True
-        )
+        auth_option = st.radio("Choose Option", ["Login", "Signup"], horizontal=True)
 
         username = st.text_input("Username")
-
         email = st.text_input("Email")
-
-        password = st.text_input(
-            "Password",
-            type="password"
-        )
-
-        # =====================================================
-        # SIGNUP
-        # =====================================================
+        password = st.text_input("Password", type="password")
 
         if auth_option == "Signup":
-
             if st.button("Create Account"):
-
                 hashed = hash_password(password)
-
-                cursor.execute(
-                    "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
-                    (username, email, hashed)
-                )
-
+                cursor.execute("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", (username, email, hashed))
                 conn.commit()
-
                 st.success("Account Created Successfully")
 
-        # =====================================================
-        # LOGIN
-        # =====================================================
-
         else:
-
             if st.button("Login"):
-
                 hashed = hash_password(password)
-
-                cursor.execute(
-                    "SELECT * FROM users WHERE username=? AND password=?",
-                    (username, hashed)
-                )
-
+                cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, hashed))
                 result = cursor.fetchone()
 
                 if result:
-
-                    import datetime as dt
-                    cookie_manager.set("saved_username", username, expires_at=dt.datetime.now() + dt.timedelta(days=30))
-
                     st.session_state.logged_in = True
-
+                    st.session_state.logout_triggered = False 
                     st.session_state.username = username
-
                     st.success("Login Successful!")
-                    
-                    import time
                     time.sleep(1)
                     st.rerun()
-
                 else:
-
                     st.error("Invalid Username Or Password")
+        
+        # --- GOOGLE LOGIN BUTTON ---
+        st.markdown("---")
+        st.markdown("<p style='text-align: center; color: #A0A4B8;'>Or continue with</p>", unsafe_allow_html=True)
+        
+        if g_client_id and g_client_secret:
+            safe_redirect = urllib.parse.quote(redirect_url)
+            auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={g_client_id}&redirect_uri={safe_redirect}&response_type=code&scope=email%20profile&access_type=offline&prompt=consent"
+            
+            st.markdown(f'''
+            <a href="{auth_url}" target="_self" style="text-decoration: none;">
+                <button style="width: 100%; background-color: #DB4437; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.3s;">
+                    🌐 Sign in with Google
+                </button>
+            </a>
+            ''', unsafe_allow_html=True)
+        else:
+            st.error("💡 No Google Keys Found! Add CLIENT_ID & CLIENT_SECRET to your .env file.")
 
 # =========================================================
 # MAIN APP
@@ -376,152 +435,152 @@ if not st.session_state.logged_in:
 
 else:
 
-    # =====================================================
-    # SIDEBAR - UPDATED WITH LOGO & TITLE
-    # =====================================================
+    # --- 🔒 Set cookie safely inside Dashboard ---
+    if cookies_ready.get("saved_username") != st.session_state.username:
+        import datetime as dt
+        try:
+            cookie_manager.set("saved_username", st.session_state.username, expires_at=dt.datetime.now() + dt.timedelta(days=30))
+        except:
+            pass
 
-    try:
-        st.sidebar.image("logo.png", use_container_width=True) # Added Logo in Sidebar
-    except:
-        pass
+    # =====================================================
+    # MODERN SIDEBAR
+    # =====================================================
     
-    st.sidebar.title("⚡ Sai's AI Universe")                # Updated Title
+    st.sidebar.title("⚡ Sai's AI Universe")
 
-    st.sidebar.write(
-        f"Welcome {st.session_state.username}"
-    )
+    col1, col2 = st.sidebar.columns([1, 3])
+    with col1:
+        st.write("👤") 
+    with col2:
+        st.write(f"**{st.session_state.username}**")
 
     st.sidebar.markdown("---")
     
     if st.sidebar.button("🏠 Home Dashboard", use_container_width=True):
         st.session_state.menu = "🏠 Dashboard"
         st.rerun()
+
+    if st.sidebar.button("⚙️ Settings", use_container_width=True):
+        st.session_state.menu = "⚙️ Settings"
+        st.rerun()
         
     st.sidebar.markdown("---")
 
-
-    model = st.sidebar.selectbox(
-        "Choose Model",
-        [
-            "llama-3.3-70b-versatile",
-            "mixtral-8x7b-32768",
-            "gemma2-9b-it"
-        ]
-    )
-
-    temperature = st.sidebar.slider(
-        "Creativity",
-        0.0,
-        1.0,
-        0.7
-    )
+    model = st.sidebar.selectbox("Choose Model", ["llama-3.3-70b-versatile", "mixtral-8x7b-32768", "gemma2-9b-it"])
+    temperature = st.sidebar.slider("Creativity", 0.0, 1.0, 0.7)
 
     # =====================================================
-    # MEMORY
+    # MEMORY & AI FUNCTION (STRICT MODE ENFORCED)
     # =====================================================
 
     if "messages" not in st.session_state:
-
         st.session_state.messages = []
 
-    # =====================================================
-    # AI FUNCTION
-    # =====================================================
-
     def generate_response(prompt):
+        current_tool = st.session_state.menu
+        messages_list = []
+        
+        # 🔒 STRICT RULE: టూల్ పని కాకుండా వేరేది ఏది అడిగినా రిజెక్ట్ చేయాలి
+        if current_tool not in ["🏠 Dashboard", "💬 AI Chat"]:
+            system_msg = f"You are a STRICT and HIGHLY SPECIALIZED tool named '{current_tool}'. Your ONLY purpose is to perform tasks related to this tool. If the user inputs general chat (e.g., 'hi', 'how are you'), jokes, or ANY request unrelated to the exact purpose of '{current_tool}', you MUST REJECT IT. Reply ONLY with: '⚠️ Invalid request. I am the {current_tool} tool. Please use the AI Chat for general questions.'"
+            messages_list.append({"role": "system", "content": system_msg})
+            
+        messages_list.append({"role": "user", "content": prompt})
+        
         try:
-
             response = client.chat.completions.create(
                 model=model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=temperature
+                messages=messages_list,
+                temperature=0.3 if current_tool != "💬 AI Chat" else temperature # టూల్స్ కి క్రియేటివిటీ తగ్గించి లాక్ చేస్తున్నాం
             )
-
             return response.choices[0].message.content
         except Exception as e:
             return f"Error: {e}"
 
     # =====================================================
-    # DASHBOARD GRID UI (FROM PHOTOS)
+    # ADVANCED DASHBOARD GRID UI 
     # =====================================================
 
     menu = st.session_state.menu
 
     if menu == "🏠 Dashboard":
         
-        # INDIAN TIMEZONE FIX FOR GREETING
         ist = pytz.timezone('Asia/Kolkata')
         current_hour = datetime.datetime.now(ist).hour
-        
-        if current_hour < 12:
-            greeting = "Good morning"
-        elif current_hour < 18:
-            greeting = "Good afternoon"
-        else:
-            greeting = "Good evening"
+        greeting = "Good morning" if current_hour < 12 else "Good afternoon" if current_hour < 17 else "Good evening"
 
         st.markdown(f"<h1>{greeting}, {st.session_state.username} 👋</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='color: #A0A4B8;'>What would you like to create or explore today?</p>", unsafe_allow_html=True)
+        
+        search_col, filter_col = st.columns([3, 1])
+        with search_col:
+            search_query = st.text_input("🔍 Search Tools...", placeholder="e.g., Video, Chat, Resume")
+        with filter_col:
+            category = st.selectbox("📁 Category", ["All", "AI Chat & Text", "Media & Generation", "Utility & Work"])
+        
         st.write("")
 
         tools = [
-            ("💬 AI Chat", "Chat with intelligent AI"),
-            ("💻 Coding Assistant", "Write and debug code"),
-            ("📄 PDF Analyzer", "Extract info from PDFs"),
-            ("🎨 AI Image Generator", "Create stunning images"),
-            ("🔊 Voice Generator", "Text to speech conversion"),
-            ("🧠 Study Assistant", "Learn any topic easily"),
-            ("🌐 Translator", "Translate between languages"),
-            ("📝 Resume Builder", "Create professional resumes"),
-            ("📚 Quiz Generator", "Generate MCQ quizzes"),
-            ("📧 Email Writer", "Draft professional emails"),
-            ("📰 Article Writer", "Write detailed articles"),
-            ("📱 Caption Generator", "Social media captions"),
-            ("🧮 Math Solver", "Step-by-step math solutions"),
-            ("📊 PPT Generator", "Create AI presentations"),
-            ("📄 PDF Generator", "Create document PDFs"),
-            ("📝 DOCX Generator", "Create Word documents"),
-            ("🖼 Image To PDF", "Convert photos to PDF"),
-            ("🤖 AI Agent", "Execute complex tasks"),
-            ("📁 My Vault", "Save and manage your files"),
-            ("👁️ Vision AI", "Analyze images with AI"),
-            ("🌐 Web Summarizer", "Summarize webpage links"),
-            ("🎙️ Audio To Text", "Convert audio to text"),
-            ("📊 Data Analyzer", "Analyze CSV datasets"),
-            ("🎬 YT Summarizer", "Summarize YouTube videos"),
-            ("🛠️ Code Reviewer", "Fix and review code"),
-            ("💡 Idea Validator", "Validate business ideas")
+            ("💬 AI Chat", "Chat with intelligent AI", "AI Chat & Text"),
+            ("💻 Coding Assistant", "Write and debug code", "Utility & Work"),
+            ("📄 PDF Analyzer", "Extract info from PDFs", "Utility & Work"),
+            ("🎨 AI Image Generator", "Create stunning images", "Media & Generation"),
+            ("🔊 Voice Generator", "Text to speech conversion", "Media & Generation"),
+            ("🧠 Study Assistant", "Learn any topic easily", "AI Chat & Text"),
+            ("🌐 Translator", "Translate between languages", "AI Chat & Text"),
+            ("📝 Resume Builder", "Create professional resumes", "Utility & Work"),
+            ("📚 Quiz Generator", "Generate MCQ quizzes", "Utility & Work"),
+            ("📧 Email Writer", "Draft professional emails", "Utility & Work"),
+            ("📰 Article Writer", "Write detailed articles", "Utility & Work"),
+            ("📱 Caption Generator", "Social media captions", "Media & Generation"),
+            ("🧮 Math Solver", "Step-by-step math solutions", "Utility & Work"),
+            ("📊 PPT Generator", "Create AI presentations", "Media & Generation"),
+            ("📄 PDF Generator", "Create document PDFs", "Utility & Work"),
+            ("📝 DOCX Generator", "Create Word documents", "Utility & Work"),
+            ("🖼 Image To PDF", "Convert photos to PDF", "Utility & Work"),
+            ("🤖 Advanced AI Agents", "Multi-role AI assistants", "AI Chat & Text"),
+            ("📁 My Vault", "Save and manage your files", "Utility & Work"),
+            ("👁️ Vision AI", "Analyze images with AI", "Media & Generation"),
+            ("🌐 Web Summarizer", "Summarize webpage links", "Utility & Work"),
+            ("🎙️ Audio To Text", "Convert audio to text", "Media & Generation"),
+            ("📊 Data Analyzer", "Analyze CSV datasets", "Utility & Work"),
+            ("🎬 YT Summarizer", "Summarize YouTube videos", "Media & Generation"),
+            ("🛠️ Code Reviewer", "Fix and review code", "Utility & Work"),
+            ("💡 Idea Validator", "Validate business ideas", "Utility & Work")
         ]
 
-        for i in range(0, len(tools), 3):
+        filtered_tools = [t for t in tools if (search_query.lower() in t[0].lower() or search_query.lower() in t[1].lower()) and (category == "All" or t[2] == category)]
+
+        for i in range(0, len(filtered_tools), 3):
             cols = st.columns(3)
             for j in range(3):
-                if i + j < len(tools):
-                    name, desc = tools[i+j]
+                if i + j < len(filtered_tools):
+                    name, desc, cat = filtered_tools[i+j]
                     with cols[j]:
                         st.markdown(f"""
-                        <div class="tool-card">
-                            <h3 style="margin-bottom:5px;">{name}</h3>
+                        <div class="tool-card" style="box-shadow: 0 4px 15px rgba(108, 99, 255, 0.2);">
+                            <h3 style="margin-bottom:5px; display:flex; justify-content:space-between;">{name}</h3>
                             <p style="color:#A0A4B8; font-size:0.9rem;">{desc}</p>
+                            <span style="font-size:0.7rem; background:#23293B; padding:3px 8px; border-radius:10px;">{cat}</span>
                         </div>
                         """, unsafe_allow_html=True)
-                        if st.button(f"Open {name}", key=name, use_container_width=True):
+                        if st.button(f"Open", key=name, use_container_width=True):
                             st.session_state.menu = name
                             st.rerun()
 
+    elif menu == "⚙️ Settings":
+        st.title("⚙️ Account Settings")
+        st.write("Manage your AI Universe preferences here.")
+        st.info("Dark/Light mode is controlled by your system/browser settings in Streamlit natively.")
+        st.toggle("Enable Notifications", value=True)
+        st.toggle("Save Chat History to Vault")
+        
     else:
-
         col1, col2 = st.columns([1, 5])
         with col1:
             if st.button("⬅ Back to Home"):
                 st.session_state.menu = "🏠 Dashboard"
                 st.rerun()
-        
         st.markdown("---")
 
         if menu == "💬 AI Chat":
@@ -529,9 +588,7 @@ else:
             st.title("🤖 AI Chat Assistant")
 
             for msg in st.session_state.messages:
-
                 with st.chat_message(msg["role"]):
-
                     if isinstance(msg["content"], list):
                         for item in msg["content"]:
                             if item["type"] == "text":
@@ -547,7 +604,6 @@ else:
                 key="mic"
             )
 
-            # GEMINI STYLE UI REDESIGN (Right aligned plus button)
             action_col1, action_col2 = st.columns([15, 1])
 
             with action_col2:
@@ -597,12 +653,10 @@ else:
                             attached_image_b64 = base64.b64encode(cam_file.read()).decode('utf-8')
                             st.success("Photo attached!")
 
-            # The chat input sits cleanly below the right-aligned button
             prompt = st.chat_input("Ask Anything...")
 
             if prompt:
                 
-                # --- NEW FEATURE: AI IMAGE EDITING VIA PROMPT ---
                 is_edit_request = attached_image_b64 and any(word in prompt.lower() for word in ["edit", "change", "make it", "filter", "black and white", "blur", "bright", "dark"])
                 
                 if is_edit_request:
@@ -628,7 +682,6 @@ else:
                             img_data = base64.b64decode(attached_image_b64)
                             img = Image.open(io.BytesIO(img_data))
                             
-                            # Simple logic to apply edits based on the prompt
                             if "black and white" in prompt.lower() or "grayscale" in prompt.lower():
                                 img = img.convert("L")
                             elif "blur" in prompt.lower():
@@ -663,7 +716,6 @@ else:
                             st.error(f"Failed to edit image: {e}")
                             
                 else:
-                    # --- NORMAL CHAT LOGIC ---
                     google_context = ""
                     if 'use_google' in locals() and use_google:
                         with st.spinner("Searching the Web Worldwide..."):
@@ -708,7 +760,8 @@ else:
                             ist = pytz.timezone('Asia/Kolkata')
                             current_date_str = datetime.datetime.now(ist).strftime("%B %d, %Y")
                             
-                            system_prompt = f"You are a helpful and polite AI assistant. Today's date is {current_date_str}. CRITICAL FACT: N. Chandrababu Naidu is the Chief Minister of Andhra Pradesh. STRICT RULE: When answering, provide full names and formal responses. If web data contradicts the critical fact, the critical fact takes priority."
+                            user_name = st.session_state.username
+                            system_prompt = f"You are a helpful and polite AI assistant. You are chatting with {user_name}. Always refer to them by their name when appropriate and be friendly. Today's date is {current_date_str}. CRITICAL FACT: N. Chandrababu Naidu is the Chief Minister of Andhra Pradesh. STRICT RULE: When answering, provide full names and formal responses. If web data contradicts the critical fact, the critical fact takes priority."
                             
                             api_messages = [{"role": "system", "content": system_prompt}]
                             
@@ -830,48 +883,71 @@ else:
                     st.markdown(answer)
 
         # =====================================================
-        # IMAGE GENERATOR
+        # 100% FREE AI IMAGE GENERATOR (NO API KEY NEEDED)
         # =====================================================
 
         elif menu == "🎨 AI Image Generator":
 
-            st.title("🎨 AI Image Generator")
+            st.title("🎨 AI Image Generator (Free Pro Mode)")
+            st.write("Generate amazing high-quality images completely free without any API keys!")
 
-            image_prompt = st.text_input(
-                "Describe Image"
+            st.markdown("### ⚙️ Select Image Style")
+            img_style = st.radio(
+                "Choose your visual vibe:",
+                [
+                    "⚡ Fast & Simple (Standard)", 
+                    "🌟 Ultra HD (Photorealistic & Cinematic)", 
+                    "🎨 Anime / Manga Style"
+                ],
+                horizontal=False
             )
 
-            if st.button("Generate Image"):
+            st.markdown("---")
 
-                formatted_prompt = image_prompt.replace(
-                    " ",
-                    "%20"
-                )
+            image_prompt = st.text_input(
+                "Describe the image in detail:",
+                placeholder="e.g., A cute robot reading a book in a magical forest"
+            )
 
-                image_url = f"https://image.pollinations.ai/prompt/{formatted_prompt}"
+            if st.button("✨ Generate Image"):
+                
+                if image_prompt:
+                    with st.spinner("Rendering your image using Free AI Engine..."):
+                        
+                        image_path = "free_generated_image.png"
 
-                response = requests.get(image_url)
+                        try:
+                            if "Fast" in img_style:
+                                final_prompt = image_prompt
+                            elif "Ultra HD" in img_style:
+                                final_prompt = image_prompt + ", highly detailed, photorealistic, 8k resolution, cinematic lighting, masterpiece"
+                            elif "Anime" in img_style:
+                                final_prompt = image_prompt + ", anime style, studio ghibli, highly detailed 2d illustration, vibrant colors"
+                            
+                            import urllib.parse
+                            formatted_prompt = urllib.parse.quote(final_prompt)
+                            
+                            image_url = f"https://image.pollinations.ai/prompt/{formatted_prompt}?nologo=true"
 
-                image_path = "generated_image.jpg"
+                            response = requests.get(image_url)
+                            with open(image_path, "wb") as f:
+                                f.write(response.content)
 
-                with open(image_path, "wb") as f:
+                            st.success(f"Image Generated Successfully in '{img_style.split(' ')[1]}' style!")
+                            st.image(image_path, caption=image_prompt, use_container_width=True)
 
-                    f.write(response.content)
+                            with open(image_path, "rb") as file:
+                                st.download_button(
+                                    label="⬇ Download High-Res Image",
+                                    data=file,
+                                    file_name="free_ai_masterpiece.png",
+                                    mime="image/png"
+                                )
 
-                st.image(
-                    image_path,
-                    caption=image_prompt,
-                    use_container_width=True
-                )
-
-                with open(image_path, "rb") as file:
-
-                    st.download_button(
-                        label="⬇ Download Image",
-                        data=file,
-                        file_name="ai_image.jpg",
-                        mime="image/jpg"
-                    )
+                        except Exception as e:
+                            st.error(f"Generation Failed: {e}. Please check your internet connection.")
+                else:
+                    st.warning("Please describe what you want to generate!")
 
         # =====================================================
         # VOICE GENERATOR
@@ -1267,29 +1343,47 @@ else:
                         )
 
         # =====================================================
-        # AI AGENT
+        # ADVANCED MULTI-ROLE AI AGENTS
         # =====================================================
 
-        elif menu == "🤖 AI Agent":
+        elif menu == "🤖 Advanced AI Agents":
 
-            st.title("🤖 AI Agent")
+            st.title("🤖 Advanced AI Agents")
+            st.write("Select specialized AI agents for your specific tasks.")
 
-            task = st.text_area(
-                "Give Task To AI Agent"
+            agent_type = st.selectbox(
+                "Select Agent Persona",
+                [
+                    "🔬 Research Agent (Deep Web Research)",
+                    "💻 Coding Agent (Software Architect)",
+                    "📈 Finance Agent (Market Analysis)",
+                    "🎓 Study Agent (Academic Tutor)",
+                    "✈️ Travel Agent (Trip Planner)"
+                ]
             )
 
-            if st.button("Run Agent"):
+            task = st.text_area(f"Give a task to the {agent_type.split(' ')[1]}:", height=150)
 
-                answer = generate_response(
-                    f"""
-                    You are an advanced AI agent.
+            if st.button(f"🚀 Run {agent_type.split(' ')[1]}"):
+                if task:
+                    with st.spinner(f"Agent {agent_type.split(' ')[1]} is processing..."):
+                        
+                        system_prompts = {
+                            "🔬": "You are an expert Research Agent. Provide deep, factual, and well-structured research with citations where possible.",
+                            "💻": "You are a Senior Software Architect. Provide robust, scalable, and bug-free code with clear explanations.",
+                            "📈": "You are a Financial Analyst Agent. Provide logical market analysis, avoiding direct investment advice, focusing on trends and data.",
+                            "🎓": "You are an Academic Study Agent. Explain concepts clearly, using analogies and step-by-step breakdowns for easy learning.",
+                            "✈️": "You are a Luxury Travel Agent. Create detailed, practical, and exciting itineraries including logistics and local tips."
+                        }
+                        
+                        icon = agent_type.split(" ")[0]
+                        sys_prompt = system_prompts.get(icon, "You are a helpful AI.")
 
-                    Complete this task:
-                    {task}
-                    """
-                )
+                        answer = generate_response(f"System: {sys_prompt}\n\nUser Task: {task}")
+                        st.markdown(f"### 📋 Agent Report:\n{answer}")
+                else:
+                    st.warning("Please enter a task first.")
 
-                st.markdown(answer)
 
         # =====================================================
         # NEW FEATURES
@@ -1371,23 +1465,27 @@ else:
                     base64_image = base64.b64encode(img_file.read()).decode('utf-8')
 
                     try:
-
                         vision_resp = client.chat.completions.create(
                             model="meta-llama/llama-4-scout-17b-16e-instruct",
-                            messages=[{
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": img_prompt or "Describe this image in detail."},
-                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                                ]
-                            }],
-                            temperature=0.7
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are a specialized Image Analysis AI. STRICT RULE: Answer questions ONLY about the provided image. If the user asks general chat questions ('hi', 'how are you') or asks you to do tasks unrelated to the image, reply EXACTLY with: '⚠️ Invalid request. I only analyze images.'"
+                                },
+                                {
+                                    "role": "user",
+                                    "content": [
+                                        {"type": "text", "text": img_prompt or "Describe this image in detail."},
+                                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                                    ]
+                                }
+                            ],
+                            temperature=0.3
                         )
 
                         st.success(vision_resp.choices[0].message.content)
 
                     except Exception as e:
-
                         st.error(f"Vision API Error. {e}")
 
         # =====================================================
@@ -1589,7 +1687,7 @@ else:
                     st.warning("Please enter your idea first.")
 
     # =====================================================
-    # LOGOUT
+    # LOGOUT 
     # =====================================================
     
     st.sidebar.markdown("---")
@@ -1597,6 +1695,16 @@ else:
     if st.sidebar.button("Logout"):
 
         st.session_state.logged_in = False
-        cookie_manager.delete("saved_username") # Deleting Cookie on Logout
+        st.session_state.logout_triggered = True 
+        st.session_state.auth_success = False 
+        
+        if "fetched_google_user" in st.session_state:
+            del st.session_state["fetched_google_user"]
+            
+        cookie_manager.delete("saved_username") 
+        try:
+            st.query_params.clear()
+        except:
+            st.experimental_set_query_params()
 
         st.rerun()
