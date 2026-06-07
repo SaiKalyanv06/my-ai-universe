@@ -10,13 +10,14 @@
 # pip install streamlit-mic-recorder python-pptx python-docx
 # pip install reportlab pillow requests speechrecognition
 # pip install beautifulsoup4 lxml pandas youtube-transcript-api
-# pip install pytz extra-streamlit-components
+# pip install pytz g4f
 
 # =========================================================
 # IMPORTS
 # =========================================================
 
 import streamlit as st
+import streamlit.components.v1 as components
 from groq import Groq
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
@@ -45,7 +46,6 @@ import base64
 import datetime
 import urllib.parse
 import pytz
-import extra_streamlit_components as stx
 import json
 import time
 
@@ -220,13 +220,6 @@ def hash_password(password):
     ).hexdigest()
 
 # =========================================================
-# COOKIE MANAGER FOR PERSISTENT LOGIN 
-# =========================================================
-
-cookie_manager = stx.CookieManager(key="cookie_manager")
-cookies_ready = cookie_manager.get_all()
-
-# =========================================================
 # WORLDWIDE LIVE SEARCH 
 # =========================================================
 
@@ -300,72 +293,60 @@ if "menu" not in st.session_state:
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     
-if "logout_triggered" not in st.session_state:
-    st.session_state.logout_triggered = False
+if "username" not in st.session_state:
+    st.session_state.username = None
 
 # =========================================================
-# AUTO-LOGIN PROCESS (PERSISTENT LOGIN)
-# =========================================================
-
-if not st.session_state.logged_in:
-    if "saved_username" in cookies_ready and cookies_ready["saved_username"] and not st.session_state.logout_triggered:
-        st.session_state.logged_in = True
-        st.session_state.username = cookies_ready["saved_username"]
-
-# =========================================================
-# LOGIN SYSTEM (HTML META REFRESH - THE NUCLEAR OPTION)
+# PURE & CLEAN GOOGLE LOGIN SYSTEM (NO COOKIE MANAGER)
 # =========================================================
 
 if not st.session_state.logged_in:
 
-    # 1. Safely extract Code
-    auth_code = None
     try:
-        if "code" in st.query_params:
-            auth_code = st.query_params.get("code")
+        params = st.query_params.to_dict() if hasattr(st.query_params, "to_dict") else dict(st.query_params)
     except:
-        try:
-            params = st.experimental_get_query_params()
-            if "code" in params:
-                auth_code = params["code"][0]
-        except:
-            pass
+        params = st.experimental_get_query_params()
 
-    # 2. Process Login Code
-    if auth_code:
-        # Prevent loop: If we already saw this code, immediately clean the URL via HTML
-        if st.session_state.get("used_google_code") == auth_code:
-            st.markdown('<meta http-equiv="refresh" content="0; url=/">', unsafe_allow_html=True)
-            st.stop()
+    if "code" in params:
+        auth_code = params["code"]
+        if isinstance(auth_code, list): auth_code = auth_code[0]
+        
+        if st.session_state.get("last_used_code") != auth_code:
+            st.session_state.last_used_code = auth_code
+            
+            with st.spinner("Logging into AI Universe... 🚀"):
+                try:
+                    res = requests.post("https://oauth2.googleapis.com/token", data={
+                        "code": auth_code,
+                        "client_id": g_client_id,
+                        "client_secret": g_client_secret,
+                        "redirect_uri": redirect_url,
+                        "grant_type": "authorization_code"
+                    }).json()
 
-        # Mark this code as used
-        st.session_state.used_google_code = auth_code
-
-        with st.spinner("Authenticating with Google... 🚀"):
-            try:
-                token_res = requests.post("https://oauth2.googleapis.com/token", data={
-                    "code": auth_code,
-                    "client_id": g_client_id,
-                    "client_secret": g_client_secret,
-                    "redirect_uri": redirect_url,
-                    "grant_type": "authorization_code"
-                }).json()
-                
-                if "access_token" in token_res:
-                    user_res = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {token_res['access_token']}"}).json()
-                    
-                    st.session_state.logged_in = True
-                    st.session_state.username = user_res.get("name", "Google User")
-                    st.session_state.logout_triggered = False 
-                    
-                    # NUCLEAR OPTION: Pure HTML Redirect to base URL (wipes out the code)
-                    st.markdown('<meta http-equiv="refresh" content="0; url=/">', unsafe_allow_html=True)
-                    st.stop()
-                else:
-                    if token_res.get("error") != "invalid_grant":
-                        st.error(f"Login Error: {token_res}")
-            except Exception as e:
-                st.error(f"Network Error: {e}")
+                    if "access_token" in res:
+                        user_info = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {res['access_token']}"}).json()
+                        
+                        st.session_state.username = user_info.get("name", "Google User")
+                        st.session_state.logged_in = True
+                        
+                        if hasattr(st, "query_params"): st.query_params.clear()
+                        else: st.experimental_set_query_params()
+                        
+                        st.rerun()
+                    else:
+                        if res.get("error") == "invalid_grant":
+                            if hasattr(st, "query_params"): st.query_params.clear()
+                            else: st.experimental_set_query_params()
+                            st.rerun()
+                        else:
+                            st.error(f"Login failed: {res}")
+                except Exception as e:
+                    st.error(f"Network Error: {e}")
+        else:
+            if hasattr(st, "query_params"): st.query_params.clear()
+            else: st.experimental_set_query_params()
+            st.rerun()
 
     # --- NORMAL LOGIN UI ---
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -403,7 +384,6 @@ if not st.session_state.logged_in:
 
                 if result:
                     st.session_state.logged_in = True
-                    st.session_state.logout_triggered = False 
                     st.session_state.username = username
                     st.success("Login Successful!")
                     time.sleep(1)
@@ -430,18 +410,10 @@ if not st.session_state.logged_in:
             st.error("💡 No Google Keys Found! Add CLIENT_ID & CLIENT_SECRET to your .env file.")
 
 # =========================================================
-# MAIN APP
+# MAIN APP (DASHBOARD)
 # =========================================================
 
 else:
-
-    # --- 🔒 Set cookie safely inside Dashboard ---
-    if cookies_ready.get("saved_username") != st.session_state.username:
-        import datetime as dt
-        try:
-            cookie_manager.set("saved_username", st.session_state.username, expires_at=dt.datetime.now() + dt.timedelta(days=30))
-        except:
-            pass
 
     # =====================================================
     # MODERN SIDEBAR
@@ -471,7 +443,7 @@ else:
     temperature = st.sidebar.slider("Creativity", 0.0, 1.0, 0.7)
 
     # =====================================================
-    # MEMORY & AI FUNCTION (STRICT MODE ENFORCED)
+    # MEMORY & AI FUNCTION
     # =====================================================
 
     if "messages" not in st.session_state:
@@ -481,18 +453,22 @@ else:
         current_tool = st.session_state.menu
         messages_list = []
         
-        # 🔒 STRICT RULE: టూల్ పని కాకుండా వేరేది ఏది అడిగినా రిజెక్ట్ చేయాలి
         if current_tool not in ["🏠 Dashboard", "💬 AI Chat"]:
-            system_msg = f"You are a STRICT and HIGHLY SPECIALIZED tool named '{current_tool}'. Your ONLY purpose is to perform tasks related to this tool. If the user inputs general chat (e.g., 'hi', 'how are you'), jokes, or ANY request unrelated to the exact purpose of '{current_tool}', you MUST REJECT IT. Reply ONLY with: '⚠️ Invalid request. I am the {current_tool} tool. Please use the AI Chat for general questions.'"
+            system_msg = f"You are a STRICT and HIGHLY SPECIALIZED tool named '{current_tool}'. Your ONLY purpose is to perform tasks related to this tool. Use the latest web context provided if available."
             messages_list.append({"role": "system", "content": system_msg})
             
+        with st.spinner("Fetching latest updates from internet..."):
+            live_context = get_live_search_data(prompt)
+            if live_context.strip():
+                prompt = prompt + f"\n\n--- LATEST WEB DATA FOR ACCURACY ---\n{live_context}"
+                
         messages_list.append({"role": "user", "content": prompt})
         
         try:
             response = client.chat.completions.create(
                 model=model,
                 messages=messages_list,
-                temperature=0.3 if current_tool != "💬 AI Chat" else temperature # టూల్స్ కి క్రియేటివిటీ తగ్గించి లాక్ చేస్తున్నాం
+                temperature=0.3 if current_tool != "💬 AI Chat" else temperature
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -508,7 +484,7 @@ else:
         
         ist = pytz.timezone('Asia/Kolkata')
         current_hour = datetime.datetime.now(ist).hour
-        greeting = "Good morning" if current_hour < 12 else "Good afternoon" if current_hour < 17 else "Good evening"
+        greeting = "Good morning" if current_hour < 12 else "Good afternoon" if current_hour < 18 else "Good evening"
 
         st.markdown(f"<h1>{greeting}, {st.session_state.username} 👋</h1>", unsafe_allow_html=True)
         
@@ -761,7 +737,7 @@ else:
                             current_date_str = datetime.datetime.now(ist).strftime("%B %d, %Y")
                             
                             user_name = st.session_state.username
-                            system_prompt = f"You are a helpful and polite AI assistant. You are chatting with {user_name}. Always refer to them by their name when appropriate and be friendly. Today's date is {current_date_str}. CRITICAL FACT: N. Chandrababu Naidu is the Chief Minister of Andhra Pradesh. STRICT RULE: When answering, provide full names and formal responses. If web data contradicts the critical fact, the critical fact takes priority."
+                            system_prompt = f"You are a helpful and polite AI assistant. You are chatting with {user_name}. Always refer to them by their name when appropriate and be friendly. Today's date is {current_date_str}."
                             
                             api_messages = [{"role": "system", "content": system_prompt}]
                             
@@ -883,12 +859,12 @@ else:
                     st.markdown(answer)
 
         # =====================================================
-        # 100% FREE AI IMAGE GENERATOR (NO API KEY NEEDED)
+        # 100% FREE AI IMAGE GENERATOR (G4F INTEGRATED - FLUX)
         # =====================================================
 
         elif menu == "🎨 AI Image Generator":
 
-            st.title("🎨 AI Image Generator (Free Pro Mode)")
+            st.title("🎨 AI Image Generator (Free Pro Mode - G4F)")
             st.write("Generate amazing high-quality images completely free without any API keys!")
 
             st.markdown("### ⚙️ Select Image Style")
@@ -910,44 +886,71 @@ else:
             )
 
             if st.button("✨ Generate Image"):
-                
                 if image_prompt:
-                    with st.spinner("Rendering your image using Free AI Engine..."):
-                        
-                        image_path = "free_generated_image.png"
-
+                    with st.spinner("Generating image using GPT4Free (Flux Model)..."):
                         try:
-                            if "Fast" in img_style:
-                                final_prompt = image_prompt
-                            elif "Ultra HD" in img_style:
+                            import io
+                            import requests
+                            import urllib.parse
+                            from g4f.client import Client
+                            from PIL import Image
+
+                            if "Ultra HD" in img_style:
                                 final_prompt = image_prompt + ", highly detailed, photorealistic, 8k resolution, cinematic lighting, masterpiece"
                             elif "Anime" in img_style:
                                 final_prompt = image_prompt + ", anime style, studio ghibli, highly detailed 2d illustration, vibrant colors"
+                            else:
+                                final_prompt = image_prompt
+
+                            g4f_client = Client()
                             
-                            import urllib.parse
-                            formatted_prompt = urllib.parse.quote(final_prompt)
+                            # Using 'flux' model to bypass _U cookie error
+                            response = g4f_client.images.generate(
+                                model="flux",
+                                prompt=final_prompt
+                            )
                             
-                            image_url = f"https://image.pollinations.ai/prompt/{formatted_prompt}?nologo=true"
-
-                            response = requests.get(image_url)
-                            with open(image_path, "wb") as f:
-                                f.write(response.content)
-
-                            st.success(f"Image Generated Successfully in '{img_style.split(' ')[1]}' style!")
-                            st.image(image_path, caption=image_prompt, use_container_width=True)
-
-                            with open(image_path, "rb") as file:
-                                st.download_button(
-                                    label="⬇ Download High-Res Image",
-                                    data=file,
-                                    file_name="free_ai_masterpiece.png",
-                                    mime="image/png"
-                                )
-
+                            raw_url = response.data[0].url
+                            image_url = raw_url
+                            
+                            # --- MASTER FIX FOR G4F INVALID URL ---
+                            if "url=" in image_url:
+                                extracted = urllib.parse.unquote(image_url.split("url=")[1].split("&")[0])
+                                if extracted.startswith("http"):
+                                    image_url = extracted
+                            
+                            if not image_url.startswith("http"):
+                                image_url = "https://" + image_url.lstrip("/")
+                            # --------------------------------------
+                            
+                            if image_url:
+                                img_res = requests.get(image_url, timeout=30)
+                                if img_res.status_code == 200:
+                                    img_data = io.BytesIO(img_res.content)
+                                    img = Image.open(img_data)
+                                    
+                                    img.save("free_generated_image.png", format="PNG")
+                                    
+                                    st.success(f"Image Generated Successfully in '{img_style.split(' ')[1]}' style!")
+                                    st.image("free_generated_image.png", caption=image_prompt, use_container_width=True)
+                                    
+                                    with open("free_generated_image.png", "rb") as file:
+                                        st.download_button(
+                                            label="⬇ Download High-Res Image",
+                                            data=file,
+                                            file_name="g4f_image.png",
+                                            mime="image/png"
+                                        )
+                                else:
+                                    st.error(f"Failed to download the generated image. Server returned: {img_res.status_code}")
+                            else:
+                                st.error("g4f failed to return an image URL. The background provider might be down.")
+                                
                         except Exception as e:
-                            st.error(f"Generation Failed: {e}. Please check your internet connection.")
+                            st.error(f"Generation Failed: {e}. The free provider might be blocking requests right now. Try again later.")
                 else:
                     st.warning("Please describe what you want to generate!")
+
 
         # =====================================================
         # VOICE GENERATOR
@@ -1198,22 +1201,34 @@ else:
 
                         content_box.text = slide_data
 
-                        image_url = f"https://image.pollinations.ai/prompt/{ppt_topic}"
-
-                        response = requests.get(image_url)
+                        headers = {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                            "Referer": "https://pollinations.ai/",
+                            "Accept": "image/jpeg, image/png, image/*"
+                        }
+                        
+                        import urllib.parse
+                        formatted_ppt_topic = urllib.parse.quote(ppt_topic)
+                        
+                        image_url = f"https://image.pollinations.ai/prompt/{formatted_ppt_topic}?seed=123"
+                            
+                        response = requests.get(image_url, headers=headers)
 
                         image_path = "ppt_image.jpg"
 
-                        with open(image_path, "wb") as f:
-
-                            f.write(response.content)
-
-                        slide.shapes.add_picture(
-                            image_path,
-                            Inches(5.5),
-                            Inches(1.5),
-                            width=Inches(3)
-                        )
+                        if response.status_code == 200:
+                            try:
+                                import io
+                                img = Image.open(io.BytesIO(response.content))
+                                img.save(image_path)
+                                slide.shapes.add_picture(
+                                    image_path,
+                                    Inches(5.5),
+                                    Inches(1.5),
+                                    width=Inches(3)
+                                )
+                            except Exception:
+                                pass
 
                 ppt_file = f"{ppt_topic}.pptx"
 
@@ -1465,27 +1480,27 @@ else:
                     base64_image = base64.b64encode(img_file.read()).decode('utf-8')
 
                     try:
+
                         vision_resp = client.chat.completions.create(
                             model="meta-llama/llama-4-scout-17b-16e-instruct",
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a specialized Image Analysis AI. STRICT RULE: Answer questions ONLY about the provided image. If the user asks general chat questions ('hi', 'how are you') or asks you to do tasks unrelated to the image, reply EXACTLY with: '⚠️ Invalid request. I only analyze images.'"
-                                },
-                                {
-                                    "role": "user",
-                                    "content": [
-                                        {"type": "text", "text": img_prompt or "Describe this image in detail."},
-                                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                                    ]
-                                }
-                            ],
+                            messages=[{
+                                "role": "system",
+                                "content": "You are a specialized Image Analysis AI. STRICT RULE: Answer questions ONLY about the provided image. If the user asks general chat questions ('hi', 'how are you') or asks you to do tasks unrelated to the image, reply EXACTLY with: '⚠️ Invalid request. I only analyze images.'"
+                            },
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": img_prompt or "Describe this image in detail."},
+                                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                                ]
+                            }],
                             temperature=0.3
                         )
 
                         st.success(vision_resp.choices[0].message.content)
 
                     except Exception as e:
+
                         st.error(f"Vision API Error. {e}")
 
         # =====================================================
@@ -1695,13 +1710,8 @@ else:
     if st.sidebar.button("Logout"):
 
         st.session_state.logged_in = False
-        st.session_state.logout_triggered = True 
-        st.session_state.auth_success = False 
-        
-        if "fetched_google_user" in st.session_state:
-            del st.session_state["fetched_google_user"]
+        st.session_state.username = None 
             
-        cookie_manager.delete("saved_username") 
         try:
             st.query_params.clear()
         except:
