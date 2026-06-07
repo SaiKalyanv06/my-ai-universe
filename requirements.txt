@@ -7,11 +7,12 @@ streamlit-mic-recorder
 python-pptx
 python-docx
 reportlab
-Pillow
+pillow
 requests
-SpeechRecognition
+speechrecognition
+beautifulsoup4
+lxml
 pandas
 youtube-transcript-api
-beautifulsoup4
 pytz
-extra-streamlit-components
+g4f
