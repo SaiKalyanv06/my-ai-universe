@@ -10,7 +10,7 @@
 # pip install streamlit-mic-recorder python-pptx python-docx
 # pip install reportlab pillow requests speechrecognition
 # pip install beautifulsoup4 lxml pandas youtube-transcript-api
-# pip install pytz g4f
+# pip install pytz streamlit-cookies-controller 
 
 # =========================================================
 # IMPORTS
@@ -36,6 +36,7 @@ from bs4 import BeautifulSoup
 import speech_recognition as sr
 import pandas as pd
 from youtube_transcript_api import YouTubeTranscriptApi
+from streamlit_cookies_controller import CookieController
 
 import tempfile
 import requests
@@ -48,6 +49,8 @@ import urllib.parse
 import pytz
 import json
 import time
+import random
+import io
 
 # =========================================================
 # PAGE CONFIG - UPDATED
@@ -58,6 +61,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Initialize Cookie Controller for Permanent Login
+controller = CookieController()
 
 # =========================================================
 # CUSTOM CSS (TWINKLING STARS & ORBITRON FONT)
@@ -155,21 +161,25 @@ h4, h5, h6, p, label { color: #E2E8F0 !important; }
 """, unsafe_allow_html=True)
 
 # =========================================================
-# LOAD ENV
+# LOAD ENV & SECRETS (WORKS FOR BOTH LOCAL & LIVE APP)
 # =========================================================
 
 load_dotenv()
 
-api_key = os.getenv("GROQ_API_KEY")
+try:
+    api_key = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY"))
+    g_client_id = st.secrets.get("GOOGLE_CLIENT_ID", os.getenv("GOOGLE_CLIENT_ID", "")).strip().strip('"').strip("'")
+    g_client_secret = st.secrets.get("GOOGLE_CLIENT_SECRET", os.getenv("GOOGLE_CLIENT_SECRET", "")).strip().strip('"').strip("'")
+    redirect_url = st.secrets.get("REDIRECT_URI", os.getenv("REDIRECT_URI", "http://localhost:8501")).strip().strip('"').strip("'")
+except:
+    api_key = os.getenv("GROQ_API_KEY")
+    g_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip().strip('"').strip("'")
+    g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip().strip('"').strip("'")
+    redirect_url = os.getenv("REDIRECT_URI", "http://localhost:8501").strip().strip('"').strip("'")
 
 if not api_key:
-    st.error("Please Add GROQ_API_KEY In .env File")
+    st.error("Please Add GROQ_API_KEY In .env File or Streamlit Cloud Secrets")
     st.stop()
-
-# --- GOOGLE AUTH CREDENTIALS ---
-g_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip().strip('"').strip("'")
-g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip().strip('"').strip("'")
-redirect_url = os.getenv("REDIRECT_URI", "http://localhost:8501/").strip().strip('"').strip("'")
 
 # =========================================================
 # CONNECT GROQ
@@ -205,6 +215,14 @@ CREATE TABLE IF NOT EXISTS vault (
     username TEXT, 
     filename TEXT, 
     filedata BLOB
+)
+""")
+
+# AUTO-LOGIN SESSIONS TABLE
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT,
+    username TEXT
 )
 """)
 
@@ -297,10 +315,26 @@ if "username" not in st.session_state:
     st.session_state.username = None
 
 # =========================================================
-# PURE & CLEAN GOOGLE LOGIN SYSTEM (NO COOKIE MANAGER)
+# PURE & CLEAN GOOGLE LOGIN SYSTEM + AUTO LOGIN (PERMANENT)
 # =========================================================
 
+# Fetch Permanent Cookie Data
+cookie_user = controller.get("saved_username")
+
+# Automatically log in if cookie is found
+if cookie_user and not st.session_state.logged_in:
+    st.session_state.logged_in = True
+    st.session_state.username = cookie_user
+    st.rerun()
+
 if not st.session_state.logged_in:
+
+    # FIX FOR STREAMLIT COMPONENT DELAY (Prevents Login Screen Flash on Restart)
+    if "app_started" not in st.session_state:
+        st.session_state.app_started = True
+        st.markdown("<br><br><h3 style='text-align: center; color: #6C63FF;'>🔄 Reconnecting to Universe...</h3>", unsafe_allow_html=True)
+        time.sleep(0.8) # Gives the browser enough time to send cookies safely
+        st.rerun()
 
     try:
         params = st.query_params.to_dict() if hasattr(st.query_params, "to_dict") else dict(st.query_params)
@@ -329,6 +363,9 @@ if not st.session_state.logged_in:
                         
                         st.session_state.username = user_info.get("name", "Google User")
                         st.session_state.logged_in = True
+                        
+                        # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
+                        controller.set("saved_username", st.session_state.username, max_age=31536000)
                         
                         if hasattr(st, "query_params"): st.query_params.clear()
                         else: st.experimental_set_query_params()
@@ -385,6 +422,10 @@ if not st.session_state.logged_in:
                 if result:
                     st.session_state.logged_in = True
                     st.session_state.username = username
+                    
+                    # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
+                    controller.set("saved_username", username, max_age=31536000)
+                    
                     st.success("Login Successful!")
                     time.sleep(1)
                     st.rerun()
@@ -399,6 +440,8 @@ if not st.session_state.logged_in:
             safe_redirect = urllib.parse.quote(redirect_url)
             auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={g_client_id}&redirect_uri={safe_redirect}&response_type=code&scope=email%20profile&access_type=offline&prompt=consent"
             
+            st.caption(f"App URI Configured: `{redirect_url}`")
+            
             st.markdown(f'''
             <a href="{auth_url}" target="_self" style="text-decoration: none;">
                 <button style="width: 100%; background-color: #DB4437; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.3s;">
@@ -407,7 +450,7 @@ if not st.session_state.logged_in:
             </a>
             ''', unsafe_allow_html=True)
         else:
-            st.error("💡 No Google Keys Found! Add CLIENT_ID & CLIENT_SECRET to your .env file.")
+            st.error("💡 No Google Keys Found! Add CLIENT_ID & CLIENT_SECRET to your .env file or Cloud Secrets.")
 
 # =========================================================
 # MAIN APP (DASHBOARD)
@@ -622,6 +665,7 @@ else:
                                     
                     elif attach_opt == "📸 Open Camera":
                         st.info("💡 Camera is ON. Select 'None' to save battery.")
+                        st.warning("📱 Note: Mobile camera will ONLY open if the app is running on HTTPS (deployed version) or localhost. It won't work on local Wi-Fi IPs.")
                         cam_file = st.camera_input("Take a photo")
                         if cam_file:
                             st.image(cam_file, width=200)
@@ -652,7 +696,6 @@ else:
                     with st.chat_message("assistant"):
                         st.markdown("🎨 Processing your image edit request...")
                         try:
-                            import io
                             from PIL import Image, ImageFilter, ImageEnhance
                             
                             img_data = base64.b64decode(attached_image_b64)
@@ -859,13 +902,13 @@ else:
                     st.markdown(answer)
 
         # =====================================================
-        # 100% FREE AI IMAGE GENERATOR (G4F INTEGRATED - FLUX)
+        # 100% FREE AI IMAGE GENERATOR (PERMANENT SECURE BACKEND FETCH)
         # =====================================================
 
         elif menu == "🎨 AI Image Generator":
 
-            st.title("🎨 AI Image Generator (Free Pro Mode - G4F)")
-            st.write("Generate amazing high-quality images completely free without any API keys!")
+            st.title("🎨 AI Image Generator (Free Permanent Mode)")
+            st.write("Generate amazing high-quality images completely free! No limits, no API keys.")
 
             st.markdown("### ⚙️ Select Image Style")
             img_style = st.radio(
@@ -887,67 +930,65 @@ else:
 
             if st.button("✨ Generate Image"):
                 if image_prompt:
-                    with st.spinner("Generating image using GPT4Free (Flux Model)..."):
+                    with st.spinner("Rendering your image securely..."):
                         try:
-                            import io
-                            import requests
-                            import urllib.parse
-                            from g4f.client import Client
-                            from PIL import Image
-
                             if "Ultra HD" in img_style:
                                 final_prompt = image_prompt + ", highly detailed, photorealistic, 8k resolution, cinematic lighting, masterpiece"
                             elif "Anime" in img_style:
                                 final_prompt = image_prompt + ", anime style, studio ghibli, highly detailed 2d illustration, vibrant colors"
                             else:
                                 final_prompt = image_prompt
+                            
+                            formatted_prompt = urllib.parse.quote(final_prompt)
+                            seed = random.randint(1, 999999999)
+                            
+                            api_endpoints = [
+                                f"https://image.pollinations.ai/prompt/{formatted_prompt}?seed={seed}&nologo=true",
+                                f"https://image.pollinations.ai/prompt/{formatted_prompt}?model=flux&seed={seed}&nologo=true",
+                                f"https://image.pollinations.ai/prompt/{formatted_prompt}?model=turbo&seed={seed}&nologo=true"
+                            ]
+                            
+                            headers = {
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                                "Accept-Language": "en-US,en;q=0.9",
+                                "Connection": "keep-alive",
+                                "Upgrade-Insecure-Requests": "1"
+                            }
 
-                            g4f_client = Client()
-                            
-                            # Using 'flux' model to bypass _U cookie error
-                            response = g4f_client.images.generate(
-                                model="flux",
-                                prompt=final_prompt
-                            )
-                            
-                            raw_url = response.data[0].url
-                            image_url = raw_url
-                            
-                            # --- MASTER FIX FOR G4F INVALID URL ---
-                            if "url=" in image_url:
-                                extracted = urllib.parse.unquote(image_url.split("url=")[1].split("&")[0])
-                                if extracted.startswith("http"):
-                                    image_url = extracted
-                            
-                            if not image_url.startswith("http"):
-                                image_url = "https://" + image_url.lstrip("/")
-                            # --------------------------------------
-                            
-                            if image_url:
-                                img_res = requests.get(image_url, timeout=30)
-                                if img_res.status_code == 200:
-                                    img_data = io.BytesIO(img_res.content)
-                                    img = Image.open(img_data)
-                                    
-                                    img.save("free_generated_image.png", format="PNG")
-                                    
-                                    st.success(f"Image Generated Successfully in '{img_style.split(' ')[1]}' style!")
-                                    st.image("free_generated_image.png", caption=image_prompt, use_container_width=True)
-                                    
-                                    with open("free_generated_image.png", "rb") as file:
-                                        st.download_button(
-                                            label="⬇ Download High-Res Image",
-                                            data=file,
-                                            file_name="g4f_image.png",
-                                            mime="image/png"
-                                        )
-                                else:
-                                    st.error(f"Failed to download the generated image. Server returned: {img_res.status_code}")
-                            else:
-                                st.error("g4f failed to return an image URL. The background provider might be down.")
+                            success = False
+                            for api_url in api_endpoints:
+                                try:
+                                    res = requests.get(api_url, headers=headers, timeout=25)
+                                    if res.status_code == 200 and len(res.content) > 1000:
+                                        img_data = io.BytesIO(res.content)
+                                        try:
+                                            img = Image.open(img_data)
+                                            img.save("free_generated_image.png", format="PNG")
+                                            
+                                            st.success(f"Image Generated Successfully in '{img_style.split(' ')[1]}' style!")
+                                            
+                                            st.image("free_generated_image.png", caption=image_prompt, use_container_width=True)
+                                            
+                                            with open("free_generated_image.png", "rb") as file:
+                                                st.download_button(
+                                                    label="⬇ Download High-Res Image",
+                                                    data=file,
+                                                    file_name="ai_masterpiece.png",
+                                                    mime="image/png"
+                                                )
+                                            success = True
+                                            break
+                                        except Exception:
+                                            continue 
+                                except Exception:
+                                    continue 
+
+                            if not success:
+                                st.error("⚠️ Servers are overloaded. Please try a simpler prompt or click Generate again.")
                                 
                         except Exception as e:
-                            st.error(f"Generation Failed: {e}. The free provider might be blocking requests right now. Try again later.")
+                            st.error(f"Generation Failed: {e}. Please try a simpler prompt.")
                 else:
                     st.warning("Please describe what you want to generate!")
 
@@ -1202,23 +1243,22 @@ else:
                         content_box.text = slide_data
 
                         headers = {
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                            "Referer": "https://pollinations.ai/",
-                            "Accept": "image/jpeg, image/png, image/*"
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                            "Accept-Language": "en-US,en;q=0.5",
+                            "Connection": "keep-alive",
+                            "Upgrade-Insecure-Requests": "1"
                         }
                         
-                        import urllib.parse
                         formatted_ppt_topic = urllib.parse.quote(ppt_topic)
-                        
-                        image_url = f"https://image.pollinations.ai/prompt/{formatted_ppt_topic}?seed=123"
+                        seed = random.randint(1, 1000000)
+                        image_url = f"https://image.pollinations.ai/prompt/{formatted_ppt_topic}?seed={seed}"
                             
-                        response = requests.get(image_url, headers=headers)
+                        try:
+                            response = requests.get(image_url, headers=headers, timeout=20)
+                            image_path = "ppt_image.jpg"
 
-                        image_path = "ppt_image.jpg"
-
-                        if response.status_code == 200:
-                            try:
-                                import io
+                            if response.status_code == 200 and len(response.content) > 1000:
                                 img = Image.open(io.BytesIO(response.content))
                                 img.save(image_path)
                                 slide.shapes.add_picture(
@@ -1227,8 +1267,8 @@ else:
                                     Inches(1.5),
                                     width=Inches(3)
                                 )
-                            except Exception:
-                                pass
+                        except Exception:
+                            pass
 
                 ppt_file = f"{ppt_topic}.pptx"
 
@@ -1708,6 +1748,15 @@ else:
     st.sidebar.markdown("---")
     
     if st.sidebar.button("Logout"):
+        
+        # Clear Auto-Login Session
+        if "session" in st.query_params:
+            session_token = st.query_params["session"]
+            cursor.execute("DELETE FROM sessions WHERE token=?", (session_token,))
+            conn.commit()
+            
+        # Delete Permanent Cookie
+        controller.remove("saved_username")
 
         st.session_state.logged_in = False
         st.session_state.username = None 
