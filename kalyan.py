@@ -318,8 +318,16 @@ if "username" not in st.session_state:
 # PURE & CLEAN GOOGLE LOGIN SYSTEM + AUTO LOGIN (PERMANENT)
 # =========================================================
 
-# Fetch Permanent Cookie Data
-cookie_user = controller.get("saved_username")
+# --- PERFECT BUG FIX FOR STREAMLIT CLOUD COOKIE ERROR ---
+cookie_user = None
+try:
+    if controller is not None:
+        # Instead of .get() which crashes, we fetch all cookies safely
+        all_cookies = controller.getAll()
+        if isinstance(all_cookies, dict):
+            cookie_user = all_cookies.get("saved_username")
+except Exception:
+    cookie_user = None
 
 # Automatically log in if cookie is found
 if cookie_user and not st.session_state.logged_in:
@@ -329,11 +337,10 @@ if cookie_user and not st.session_state.logged_in:
 
 if not st.session_state.logged_in:
 
-    # FIX FOR STREAMLIT COMPONENT DELAY (Prevents Login Screen Flash on Restart)
     if "app_started" not in st.session_state:
         st.session_state.app_started = True
         st.markdown("<br><br><h3 style='text-align: center; color: #6C63FF;'>🔄 Reconnecting to Universe...</h3>", unsafe_allow_html=True)
-        time.sleep(0.8) # Gives the browser enough time to send cookies safely
+        time.sleep(0.8)
         st.rerun()
 
     try:
@@ -364,8 +371,10 @@ if not st.session_state.logged_in:
                         st.session_state.username = user_info.get("name", "Google User")
                         st.session_state.logged_in = True
                         
-                        # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
-                        controller.set("saved_username", st.session_state.username, max_age=31536000)
+                        try:
+                            controller.set("saved_username", st.session_state.username, max_age=31536000)
+                        except:
+                            pass # Fail silently if cookies block
                         
                         if hasattr(st, "query_params"): st.query_params.clear()
                         else: st.experimental_set_query_params()
@@ -423,8 +432,10 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = username
                     
-                    # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
-                    controller.set("saved_username", username, max_age=31536000)
+                    try:
+                        controller.set("saved_username", username, max_age=31536000)
+                    except:
+                        pass
                     
                     st.success("Login Successful!")
                     time.sleep(1)
@@ -1755,8 +1766,12 @@ else:
             cursor.execute("DELETE FROM sessions WHERE token=?", (session_token,))
             conn.commit()
             
-        # Delete Permanent Cookie
-        controller.remove("saved_username")
+        # Delete Permanent Cookie safely
+        try:
+            if controller is not None:
+                controller.remove("saved_username")
+        except:
+            pass
 
         st.session_state.logged_in = False
         st.session_state.username = None 
