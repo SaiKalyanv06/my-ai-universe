@@ -346,14 +346,9 @@ if not st.session_state.logged_in:
         time.sleep(0.8) # Gives the browser enough time to send cookies safely
         st.rerun()
 
-    try:
-        params = st.query_params.to_dict() if hasattr(st.query_params, "to_dict") else dict(st.query_params)
-    except:
-        params = st.experimental_get_query_params()
-
-    if "code" in params:
-        auth_code = params["code"]
-        if isinstance(auth_code, list): auth_code = auth_code[0]
+    # లేటెస్ట్ స్ట్రీమ్‌లిట్ వెర్షన్ ప్రకారం క్వెరీ పారామీటర్స్ రీడ్ చేయడం
+    if "code" in st.query_params:
+        auth_code = st.query_params["code"]
         
         if st.session_state.get("last_used_code") != auth_code:
             st.session_state.last_used_code = auth_code
@@ -377,22 +372,19 @@ if not st.session_state.logged_in:
                         # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
                         controller.set("saved_username", st.session_state.username, max_age=31536000)
                         
-                        if hasattr(st, "query_params"): st.query_params.clear()
-                        else: st.experimental_set_query_params()
-                        
+                        # పాత పారామీటర్స్ ని క్లియర్ చేయడం
+                        st.query_params.clear()
                         st.rerun()
                     else:
                         if res.get("error") == "invalid_grant":
-                            if hasattr(st, "query_params"): st.query_params.clear()
-                            else: st.experimental_set_query_params()
+                            st.query_params.clear()
                             st.rerun()
                         else:
                             st.error(f"Login failed: {res}")
                 except Exception as e:
                     st.error(f"Network Error: {e}")
         else:
-            if hasattr(st, "query_params"): st.query_params.clear()
-            else: st.experimental_set_query_params()
+            st.query_params.clear()
             st.rerun()
 
     # --- NORMAL LOGIN UI ---
@@ -760,7 +752,7 @@ else:
                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{attached_image_b64}"}}
                             ]
                         }
-                        chat_model = "meta-llama/llama-4-scout-17b-16e-instruct"
+                        chat_model = "llama-3.2-11b-vision-preview" # FIX: Correct Groq Vision Model
                     else:
                         user_message = {
                             "role": "user",
@@ -790,7 +782,7 @@ else:
                             current_date_str = datetime.datetime.now(ist).strftime("%B %d, %Y")
                             
                             user_name = st.session_state.username
-                            system_prompt = f"You are a helpful and polite AI assistant. You are chatting with {user_name}. Always refer to them by their name when appropriate and be friendly. Today's date is {current_date_str}."
+                            system_prompt = f"You are a helpful AI assistant named Sai's Universe AI. You are chatting with {user_name}. Always refer to them by their name when appropriate and be friendly. Today's date is {current_date_str}. Note that the current year is 2026, and political positions have updated since the 2024 elections (e.g., Nara Chandrababu Naidu is the current active Chief Minister of Andhra Pradesh)."
                             
                             api_messages = [{"role": "system", "content": system_prompt}]
                             
@@ -800,12 +792,13 @@ else:
                                 
                                 if is_last_message and 'use_google' in locals() and use_google:
                                     if google_context.strip():
-                                        inject_text = f"\n\n--- LATEST WEB DATA ---\n{google_context}\n\nCRITICAL RULE: Answer the user's query using the facts from the web data above. DO NOT say 'According to the web data' or 'Based on search'. Just give the direct factual answer naturally."
+                                        # ACCURACY OVERRIDE: Prevent 2023 pre-cutoff memories from overwriting the reality of 2026.
+                                        inject_text = f"\n\n--- LATEST WEB DATA ---\n{google_context}\n\nCRITICAL RULE: The current year is 2026. Your internal database cutoff is outdated (2023). Do NOT use your old 2023 memories to guess current political leaders. For Andhra Pradesh, Nara Chandrababu Naidu is the Chief Minister since June 2024. Use the live web data and this 2026 timeframe to answer the user's query perfectly and naturally without any disclaimers."
                                     else:
-                                        inject_text = f"\n\nCRITICAL RULE: Provide the best factual answer from your internal knowledge. DO NOT mention that you could not search the web. Just answer naturally."
+                                        inject_text = f"\n\nCRITICAL RULE: Provide the best factual answer from your internal knowledge, but keep in mind that the year is 2026. DO NOT mention that you could not search the web. Just answer naturally."
                                         
                                 if isinstance(m["content"], list):
-                                    if chat_model != "meta-llama/llama-4-scout-17b-16e-instruct":
+                                    if chat_model != "llama-3.2-11b-vision-preview": # FIX: Updated reference
                                         text_only = ""
                                         for item in m["content"]:
                                             if item["type"] == "text":
@@ -1532,7 +1525,7 @@ else:
                     try:
 
                         vision_resp = client.chat.completions.create(
-                            model="meta-llama/llama-4-scout-17b-16e-instruct",
+                            model="llama-3.2-11b-vision-preview", # FIX: Correct Groq Vision Model
                             messages=[{
                                 "role": "system",
                                 "content": "You are a specialized Image Analysis AI. STRICT RULE: Answer questions ONLY about the provided image. If the user asks general chat questions ('hi', 'how are you') or asks you to do tasks unrelated to the image, reply EXACTLY with: '⚠️ Invalid request. I only analyze images.'"
@@ -1663,18 +1656,14 @@ else:
 
                 try:
 
-                    if "v=" in yt_url:
-                        
+                    if "v=" in yt_url: # FIX: Advanced Youtube Link Handlers
                         video_id = yt_url.split("v=")[1].split("&")[0]
-                        
                     elif "youtu.be/" in yt_url:
-                        
                         video_id = yt_url.split("youtu.be/")[1].split("?")[0]
-                        
+                    elif "shorts/" in yt_url:
+                        video_id = yt_url.split("shorts/")[1].split("?")[0]
                     else:
-                        
                         st.error("Invalid YouTube URL")
-                        
                         video_id = None
 
                     if video_id:
