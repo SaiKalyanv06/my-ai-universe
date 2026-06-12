@@ -168,11 +168,15 @@ load_dotenv()
 
 try:
     api_key = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY"))
+    cf_api_token = st.secrets.get("CLOUDFLARE_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip().strip('"').strip("'")
+    cf_account_id = st.secrets.get("CLOUDFLARE_ACCOUNT_ID", os.getenv("CLOUDFLARE_ACCOUNT_ID", "")).strip().strip('"').strip("'")
     g_client_id = st.secrets.get("GOOGLE_CLIENT_ID", os.getenv("GOOGLE_CLIENT_ID", "")).strip().strip('"').strip("'")
     g_client_secret = st.secrets.get("GOOGLE_CLIENT_SECRET", os.getenv("GOOGLE_CLIENT_SECRET", "")).strip().strip('"').strip("'")
     redirect_url = st.secrets.get("REDIRECT_URI", os.getenv("REDIRECT_URI", "http://localhost:8501")).strip().strip('"').strip("'")
 except:
     api_key = os.getenv("GROQ_API_KEY")
+    cf_api_token = os.getenv("CLOUDFLARE_API_TOKEN", "").strip().strip('"').strip("'")
+    cf_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip().strip('"').strip("'")
     g_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip().strip('"').strip("'")
     g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip().strip('"').strip("'")
     redirect_url = os.getenv("REDIRECT_URI", "http://localhost:8501").strip().strip('"').strip("'")
@@ -488,7 +492,7 @@ else:
     temperature = st.sidebar.slider("Creativity", 0.0, 1.0, 0.7)
 
     # =====================================================
-    # MEMORY & AI FUNCTION
+    # MEMORY & AI FUNCTION (UPGRADED FOR MAX ACCURACY & NO CRASHES)
     # =====================================================
 
     if "messages" not in st.session_state:
@@ -498,14 +502,38 @@ else:
         current_tool = st.session_state.menu
         messages_list = []
         
+        # MASTER PROMPTS INJECTED HERE SO WE DON'T TOUCH YOUR LOGIC BELOW
+        master_prompts = {
+            "💻 Coding Assistant": "Act as an Elite Principal Software Engineer. Write clean, perfectly optimized, robust, and bug-free code. Include deep explanations.",
+            "📄 PDF Analyzer": "You are a Master Document Analyst. Analyze the text carefully and answer strictly based on the text provided. Give an exhaustive and detailed response.",
+            "🧠 Study Assistant": "You are a brilliant professor. Explain complex topics using simple analogies and structured formats. Ensure 100% factual accuracy.",
+            "🌐 Translator": "You are an expert multi-lingual translator. Translate the text perfectly while maintaining the original tone and intent.",
+            "📝 Resume Builder": "You are an expert HR Manager. Format details into a highly professional, ATS-friendly resume structure.",
+            "📚 Quiz Generator": "You are a master educator. Generate a structured MCQ quiz with exact answers and deep explanations.",
+            "📧 Email Writer": "You are an expert in corporate communication. Write a professional, polite, and highly effective email.",
+            "📰 Article Writer": "You are a Pulitzer Prize-winning journalist. Write a captivating, well-researched, and highly detailed article.",
+            "📱 Caption Generator": "You are an expert Social Media Manager. Create highly engaging, viral captions with relevant hashtags.",
+            "🧮 Math Solver": "You are an expert Mathematician. Solve the problem step-by-step with 100% logical accuracy. Check your calculations.",
+            "📊 PPT Generator": "You are a master presentation designer. Provide brilliant slide-by-slide content.",
+            "📄 PDF Generator": "You are a professional technical writer. Write highly detailed, well-structured, and accurate notes.",
+            "📝 DOCX Generator": "You are a professional author. Write a comprehensive, perfectly structured document.",
+            "🌐 Web Summarizer": "You are an expert data analyst. Extract the core arguments, facts, and structure a perfect, detailed summary.",
+            "📊 Data Analyzer": "You are a Lead Data Scientist. Analyze the dataset strictly based on the stats provided. Give extremely accurate, mathematical, and logical answers without hallucinating numbers.",
+            "🎬 YT Summarizer": "You are an expert content analyst. Break down this video transcript into key ideas, quotes, and a structured conclusion.",
+            "🛠️ Code Reviewer": "Act as an Elite Security & Performance Code Reviewer. Find logical bugs, security flaws, and performance issues. Explain deeply, then provide the perfectly fixed code.",
+            "💡 Idea Validator": "Act as a Top Tier Silicon Valley VC. Ruthlessly evaluate the idea. Give a massive, highly detailed report containing Market Size, Competitors, Monetization, SWOT, and a 30-Day Execution Roadmap."
+        }
+        
         if current_tool not in ["🏠 Dashboard", "💬 AI Chat"]:
-            system_msg = f"You are a STRICT and HIGHLY SPECIALIZED tool named '{current_tool}'. Your ONLY purpose is to perform tasks related to this tool. Use the latest web context provided if available."
+            system_msg = f"You are 'Sai's Universe AI', a Master-Level Expert executing the '{current_tool}' tool.\n"
+            system_msg += master_prompts.get(current_tool, "You are a STRICT and HIGHLY SPECIALIZED tool. Your ONLY purpose is to perform tasks related to this tool.")
+            system_msg += "\nCRITICAL RULES:\n1. BE EXHAUSTIVE: Provide detailed, well-structured, and comprehensive responses.\n2. BE 100% ACCURATE: Your logic and facts must be perfect.\n3. CURRENT YEAR: It is currently 2026."
             messages_list.append({"role": "system", "content": system_msg})
             
         with st.spinner("Fetching latest updates from internet..."):
             live_context = get_live_search_data(prompt)
-            if live_context.strip():
-                prompt = prompt + f"\n\n--- LATEST WEB DATA FOR ACCURACY ---\n{live_context}"
+            if live_context and live_context.strip():
+                prompt = prompt + f"\n\n--- STRICT LATEST WEB DATA FOR ACCURACY ---\n{live_context}"
                 
         messages_list.append({"role": "user", "content": prompt})
         
@@ -513,11 +541,12 @@ else:
             response = client.chat.completions.create(
                 model=model,
                 messages=messages_list,
-                temperature=0.3 if current_tool != "💬 AI Chat" else temperature
+                temperature=0.2 if current_tool != "💬 AI Chat" else temperature,
+                max_tokens=6000 # Added 6000 max_tokens here to prevent app crash on big inputs
             )
             return response.choices[0].message.content
         except Exception as e:
-            return f"Error: {e}"
+            return f"⚠️ API Error (Please try splitting the text if it's too large): {e}"
 
     # =====================================================
     # ADVANCED DASHBOARD GRID UI 
@@ -752,7 +781,7 @@ else:
                                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{attached_image_b64}"}}
                             ]
                         }
-                        chat_model = "llama-3.2-11b-vision-preview" # FIX: Correct Groq Vision Model
+                        chat_model = "llama-3.2-11b-vision-preview" 
                     else:
                         user_message = {
                             "role": "user",
@@ -792,13 +821,12 @@ else:
                                 
                                 if is_last_message and 'use_google' in locals() and use_google:
                                     if google_context.strip():
-                                        # ACCURACY OVERRIDE: Prevent 2023 pre-cutoff memories from overwriting the reality of 2026.
                                         inject_text = f"\n\n--- LATEST WEB DATA ---\n{google_context}\n\nCRITICAL RULE: The current year is 2026. Your internal database cutoff is outdated (2023). Do NOT use your old 2023 memories to guess current political leaders. For Andhra Pradesh, Nara Chandrababu Naidu is the Chief Minister since June 2024. Use the live web data and this 2026 timeframe to answer the user's query perfectly and naturally without any disclaimers."
                                     else:
                                         inject_text = f"\n\nCRITICAL RULE: Provide the best factual answer from your internal knowledge, but keep in mind that the year is 2026. DO NOT mention that you could not search the web. Just answer naturally."
                                         
                                 if isinstance(m["content"], list):
-                                    if chat_model != "llama-3.2-11b-vision-preview": # FIX: Updated reference
+                                    if chat_model != "llama-3.2-11b-vision-preview": 
                                         text_only = ""
                                         for item in m["content"]:
                                             if item["type"] == "text":
@@ -825,6 +853,7 @@ else:
                                 model=chat_model,
                                 messages=api_messages,
                                 temperature=0.2 if ('use_google' in locals() and use_google) else temperature, 
+                                max_tokens=6000, # Added max_tokens here for massive inputs
                                 stream=True
                             )
 
@@ -905,21 +934,25 @@ else:
                     st.markdown(answer)
 
         # =====================================================
-        # 100% FREE AI IMAGE GENERATOR (PERMANENT SECURE BACKEND FETCH)
+        # AI IMAGE GENERATOR (PERMANENT CLOUDFLARE FIX)
         # =====================================================
 
         elif menu == "🎨 AI Image Generator":
 
-            st.title("🎨 AI Image Generator (Free Permanent Mode)")
-            st.write("Generate amazing high-quality images completely free! No limits, no API keys.")
+            st.title("🎨 AI Image Generator (Pro Mode)")
+            st.write("Generate amazing high-quality images using your secure Cloudflare token!")
+
+            if not cf_api_token or not cf_account_id:
+                st.error("💡 Cloudflare API Token or Account ID Not Found! Please add 'CLOUDFLARE_API_TOKEN' and 'CLOUDFLARE_ACCOUNT_ID' to your Secrets or .env file.")
+                st.stop()
 
             st.markdown("### ⚙️ Select Image Style")
             img_style = st.radio(
                 "Choose your visual vibe:",
                 [
-                    "⚡ Fast & Simple (Standard)", 
-                    "🌟 Ultra HD (Photorealistic & Cinematic)", 
-                    "🎨 Anime / Manga Style"
+                    "🌟 Ultra HD (Photorealistic)", 
+                    "🎨 Anime / Manga Style",
+                    "✨ Cinematic / 3D Render"
                 ],
                 horizontal=False
             )
@@ -933,68 +966,48 @@ else:
 
             if st.button("✨ Generate Image"):
                 if image_prompt:
-                    with st.spinner("Rendering your image securely..."):
+                    with st.spinner("🎨 Creating your masterpiece... Please wait..."):
                         try:
                             if "Ultra HD" in img_style:
-                                final_prompt = image_prompt + ", highly detailed, photorealistic, 8k resolution, cinematic lighting, masterpiece"
+                                final_prompt = image_prompt + ", highly detailed, photorealistic, 8k resolution, masterpiece"
                             elif "Anime" in img_style:
-                                final_prompt = image_prompt + ", anime style, studio ghibli, highly detailed 2d illustration, vibrant colors"
+                                final_prompt = image_prompt + ", anime style, studio ghibli, vibrant colors, detailed illustration"
                             else:
-                                final_prompt = image_prompt
+                                final_prompt = image_prompt + ", cinematic lighting, octane render, unreal engine 5, highly detailed"
                             
-                            formatted_prompt = urllib.parse.quote(final_prompt)
-                            seed = random.randint(1, 999999999)
+                            API_URL = f"https://api.cloudflare.com/client/v4/accounts/{cf_account_id}/ai/run/@cf/stabilityai/stable-diffusion-xl-base-1.0"
+                            headers = {"Authorization": f"Bearer {cf_api_token}"}
+                            payload = {"prompt": final_prompt}
                             
-                            api_endpoints = [
-                                f"https://image.pollinations.ai/prompt/{formatted_prompt}?seed={seed}&nologo=true",
-                                f"https://image.pollinations.ai/prompt/{formatted_prompt}?model=flux&seed={seed}&nologo=true",
-                                f"https://image.pollinations.ai/prompt/{formatted_prompt}?model=turbo&seed={seed}&nologo=true"
-                            ]
+                            response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
                             
-                            headers = {
-                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                                "Accept-Language": "en-US,en;q=0.9",
-                                "Connection": "keep-alive",
-                                "Upgrade-Insecure-Requests": "1"
-                            }
-
-                            success = False
-                            for api_url in api_endpoints:
+                            if response.status_code == 200:
+                                img_bytes = response.content
+                                img = Image.open(io.BytesIO(img_bytes))
+                                
+                                st.success("✅ Image Generated Successfully!")
+                                st.image(img, caption=image_prompt, use_container_width=True)
+                                
+                                st.download_button(
+                                    label="⬇️ Download High-Res Image",
+                                    data=img_bytes,
+                                    file_name="masterpiece.jpg",
+                                    mime="image/jpeg",
+                                    use_container_width=True
+                                )
+                            elif response.status_code == 503:
+                                st.warning("⏳ The AI Model is currently waking up. Please wait 15 seconds and click Generate again!")
+                            else:
                                 try:
-                                    res = requests.get(api_url, headers=headers, timeout=25)
-                                    if res.status_code == 200 and len(res.content) > 1000:
-                                        img_data = io.BytesIO(res.content)
-                                        try:
-                                            img = Image.open(img_data)
-                                            img.save("free_generated_image.png", format="PNG")
-                                            
-                                            st.success(f"Image Generated Successfully in '{img_style.split(' ')[1]}' style!")
-                                            
-                                            st.image("free_generated_image.png", caption=image_prompt, use_container_width=True)
-                                            
-                                            with open("free_generated_image.png", "rb") as file:
-                                                st.download_button(
-                                                    label="⬇ Download High-Res Image",
-                                                    data=file,
-                                                    file_name="ai_masterpiece.png",
-                                                    mime="image/png"
-                                                )
-                                            success = True
-                                            break
-                                        except Exception:
-                                            continue 
-                                except Exception:
-                                    continue 
-
-                            if not success:
-                                st.error("⚠️ Servers are overloaded. Please try a simpler prompt or click Generate again.")
+                                    error_msg = response.json()
+                                except:
+                                    error_msg = response.text
+                                st.error(f"⚠️ Cloudflare Error: {error_msg}")
                                 
                         except Exception as e:
-                            st.error(f"Generation Failed: {e}. Please try a simpler prompt.")
+                            st.error(f"Network Error: {e}. Check your internet connection.")
                 else:
                     st.warning("Please describe what you want to generate!")
-
 
         # =====================================================
         # VOICE GENERATOR
@@ -1525,7 +1538,7 @@ else:
                     try:
 
                         vision_resp = client.chat.completions.create(
-                            model="llama-3.2-11b-vision-preview", # FIX: Correct Groq Vision Model
+                            model="llama-3.2-11b-vision-preview", 
                             messages=[{
                                 "role": "system",
                                 "content": "You are a specialized Image Analysis AI. STRICT RULE: Answer questions ONLY about the provided image. If the user asks general chat questions ('hi', 'how are you') or asks you to do tasks unrelated to the image, reply EXACTLY with: '⚠️ Invalid request. I only analyze images.'"
@@ -1537,7 +1550,8 @@ else:
                                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                                 ]
                             }],
-                            temperature=0.3
+                            temperature=0.3,
+                            max_tokens=4000 # Added max_tokens for safety
                         )
 
                         st.success(vision_resp.choices[0].message.content)
@@ -1656,7 +1670,7 @@ else:
 
                 try:
 
-                    if "v=" in yt_url: # FIX: Advanced Youtube Link Handlers
+                    if "v=" in yt_url: 
                         video_id = yt_url.split("v=")[1].split("&")[0]
                     elif "youtu.be/" in yt_url:
                         video_id = yt_url.split("youtu.be/")[1].split("?")[0]
