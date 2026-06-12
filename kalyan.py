@@ -3,20 +3,11 @@
 # =========================================================
 
 # =========================================================
-# INSTALL THESE FIRST
-# =========================================================
-
-# pip install streamlit groq python-dotenv PyPDF2 gtts
-# pip install streamlit-mic-recorder python-pptx python-docx
-# pip install reportlab pillow requests speechrecognition
-# pip install beautifulsoup4 lxml pandas youtube-transcript-api
-# pip install pytz 
-
-# =========================================================
 # IMPORTS
 # =========================================================
 
 import streamlit as st
+import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 from groq import Groq
 from dotenv import load_dotenv
@@ -60,6 +51,15 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# =========================================================
+# PERMANENT LOGIN COOKIE MANAGER (CRASH-FREE)
+# =========================================================
+@st.cache_resource(experimental_allow_widgets=True)
+def get_cookie_manager():
+    return stx.CookieManager()
+
+cookie_manager = get_cookie_manager()
 
 # =========================================================
 # CUSTOM CSS (TWINKLING STARS & ORBITRON FONT)
@@ -309,8 +309,16 @@ if "username" not in st.session_state:
     st.session_state.username = None
 
 # =========================================================
-# PURE & CLEAN LOGIN SYSTEM (NO GOOGLE / NO COOKIES)
+# PURE & CLEAN LOGIN SYSTEM (WITH PERMANENT COOKIES)
 # =========================================================
+
+# 1. కుకీస్ లో యూజర్ నేమ్ దొరికితే డైరెక్ట్ గా లాగిన్ చేసేస్తుంది
+if not st.session_state.logged_in:
+    cookie_user = cookie_manager.get("saved_username")
+    if cookie_user:
+        st.session_state.logged_in = True
+        st.session_state.username = cookie_user
+        st.rerun() 
 
 if not st.session_state.logged_in:
 
@@ -351,6 +359,9 @@ if not st.session_state.logged_in:
                 if result:
                     st.session_state.logged_in = True
                     st.session_state.username = username
+                    
+                    # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
+                    cookie_manager.set("saved_username", username, max_age=31536000)
                     
                     st.success("Login Successful!")
                     time.sleep(1)
@@ -1668,6 +1679,9 @@ else:
             cursor.execute("DELETE FROM sessions WHERE token=?", (session_token,))
             conn.commit()
             
+        # Delete Permanent Cookie
+        cookie_manager.delete("saved_username")
+
         st.session_state.logged_in = False
         st.session_state.username = None 
             
