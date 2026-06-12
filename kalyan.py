@@ -2,20 +2,6 @@
 # SAI'S AI UNIVERSE - COMPLETE ULTRA AI PLATFORM
 # =========================================================
 
-# =========================================================
-# INSTALL THESE FIRST
-# =========================================================
-
-# pip install streamlit groq python-dotenv PyPDF2 gtts
-# pip install streamlit-mic-recorder python-pptx python-docx
-# pip install reportlab pillow requests speechrecognition
-# pip install beautifulsoup4 lxml pandas youtube-transcript-api
-# pip install pytz streamlit-cookies-controller 
-
-# =========================================================
-# IMPORTS
-# =========================================================
-
 import streamlit as st
 import streamlit.components.v1 as components
 from groq import Groq
@@ -53,7 +39,7 @@ import random
 import io
 
 # =========================================================
-# PAGE CONFIG - UPDATED
+# PAGE CONFIG
 # =========================================================
 
 st.set_page_config(
@@ -66,7 +52,7 @@ st.set_page_config(
 controller = CookieController()
 
 # =========================================================
-# CUSTOM CSS (TWINKLING STARS & ORBITRON FONT)
+# CUSTOM CSS
 # =========================================================
 
 st.markdown("""
@@ -161,7 +147,7 @@ h4, h5, h6, p, label { color: #E2E8F0 !important; }
 """, unsafe_allow_html=True)
 
 # =========================================================
-# LOAD ENV & SECRETS (WORKS FOR BOTH LOCAL & LIVE APP)
+# LOAD ENV & SECRETS
 # =========================================================
 
 load_dotenv()
@@ -216,7 +202,6 @@ CREATE TABLE IF NOT EXISTS vault (
 )
 """)
 
-# AUTO-LOGIN SESSIONS TABLE
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS sessions (
     token TEXT,
@@ -316,21 +301,16 @@ if "username" not in st.session_state:
 # PURE & CLEAN LOGIN SYSTEM (WITH PERMANENT COOKIES)
 # =========================================================
 
-# 1. సెషన్ స్టేట్ ని ముందే డిఫైన్ చేసుకోవాలి
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = None
-
-# 2. ఒకవేళ లాగిన్ అవ్వకపోతే, కుకీస్ లో డేటా ఉందేమో చెక్ చేస్తుంది
+# 1. ఒకవేళ లాగిన్ అవ్వకపోతే, కుకీస్ లో డేటా ఉందేమో చెక్ చేస్తుంది
 if not st.session_state.logged_in:
-    cookie_user = controller.get("saved_username")
-    
-    # 3. కుకీస్ లో యూజర్ నేమ్ దొరికితే డైరెక్ట్ గా లాగిన్ చేసేస్తుంది
-    if cookie_user:
-        st.session_state.logged_in = True
-        st.session_state.username = cookie_user
-        st.rerun() # వెంటనే పేజీ రిఫ్రెష్ అయి డ్యాష్‌బోర్డ్ లోకి వెళ్తుంది
+    try:
+        cookie_user = controller.get("saved_username")
+        if cookie_user:
+            st.session_state.logged_in = True
+            st.session_state.username = cookie_user
+            st.rerun() 
+    except Exception as e:
+        pass # Handle cookie controller initialization delays smoothly
 
 if not st.session_state.logged_in:
 
@@ -372,7 +352,7 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = username
                     
-                    # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
+                    # Set Permanent Cookie (Valid for 1 Year)
                     controller.set("saved_username", username, max_age=31536000)
                     
                     st.success("Login Successful!")
@@ -415,7 +395,7 @@ else:
     temperature = st.sidebar.slider("Creativity", 0.0, 1.0, 0.7)
 
     # =====================================================
-    # MEMORY & AI FUNCTION (UPGRADED FOR MAX ACCURACY & NO CRASHES)
+    # MEMORY & AI FUNCTION 
     # =====================================================
 
     if "messages" not in st.session_state:
@@ -425,7 +405,6 @@ else:
         current_tool = st.session_state.menu
         messages_list = []
         
-        # MASTER PROMPTS INJECTED HERE SO WE DON'T TOUCH YOUR LOGIC BELOW
         master_prompts = {
             "💻 Coding Assistant": "Act as an Elite Principal Software Engineer. Write clean, perfectly optimized, robust, and bug-free code. Include deep explanations.",
             "📄 PDF Analyzer": "You are a Master Document Analyst. Analyze the text carefully and answer strictly based on the text provided. Give an exhaustive and detailed response.",
@@ -465,7 +444,7 @@ else:
                 model=model,
                 messages=messages_list,
                 temperature=0.2 if current_tool != "💬 AI Chat" else temperature,
-                max_tokens=6000 # Added 6000 max_tokens here to prevent app crash on big inputs
+                max_tokens=6000
             )
             return response.choices[0].message.content
         except Exception as e:
@@ -776,7 +755,7 @@ else:
                                 model=chat_model,
                                 messages=api_messages,
                                 temperature=0.2 if ('use_google' in locals() and use_google) else temperature, 
-                                max_tokens=6000, # Added max_tokens here for massive inputs
+                                max_tokens=6000, 
                                 stream=True
                             )
 
@@ -1378,7 +1357,6 @@ else:
                 else:
                     st.warning("Please enter a task first.")
 
-
         # =====================================================
         # NEW FEATURES
         # =====================================================
@@ -1474,7 +1452,7 @@ else:
                                 ]
                             }],
                             temperature=0.3,
-                            max_tokens=4000 # Added max_tokens for safety
+                            max_tokens=4000
                         )
 
                         st.success(vision_resp.choices[0].message.content)
@@ -1685,14 +1663,11 @@ else:
     
     if st.sidebar.button("Logout"):
         
-        # Clear Auto-Login Session
-        if "session" in st.query_params:
-            session_token = st.query_params["session"]
-            cursor.execute("DELETE FROM sessions WHERE token=?", (session_token,))
-            conn.commit()
-            
         # Delete Permanent Cookie
-        controller.remove("saved_username")
+        try:
+            controller.remove("saved_username")
+        except:
+            pass
 
         st.session_state.logged_in = False
         st.session_state.username = None 
