@@ -3,11 +3,20 @@
 # =========================================================
 
 # =========================================================
+# INSTALL THESE FIRST
+# =========================================================
+
+# pip install streamlit groq python-dotenv PyPDF2 gtts
+# pip install streamlit-mic-recorder python-pptx python-docx
+# pip install reportlab pillow requests speechrecognition
+# pip install beautifulsoup4 lxml pandas youtube-transcript-api
+# pip install pytz streamlit-cookies-controller 
+
+# =========================================================
 # IMPORTS
 # =========================================================
 
 import streamlit as st
-import extra_streamlit_components as stx
 import streamlit.components.v1 as components
 from groq import Groq
 from dotenv import load_dotenv
@@ -27,6 +36,7 @@ from bs4 import BeautifulSoup
 import speech_recognition as sr
 import pandas as pd
 from youtube_transcript_api import YouTubeTranscriptApi
+from streamlit_cookies_controller import CookieController
 
 import tempfile
 import requests
@@ -52,14 +62,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# =========================================================
-# PERMANENT LOGIN COOKIE MANAGER (CRASH-FREE)
-# =========================================================
-@st.cache_resource(experimental_allow_widgets=True)
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+# Initialize Cookie Controller for Permanent Login
+controller = CookieController()
 
 # =========================================================
 # CUSTOM CSS (TWINKLING STARS & ORBITRON FONT)
@@ -312,13 +316,21 @@ if "username" not in st.session_state:
 # PURE & CLEAN LOGIN SYSTEM (WITH PERMANENT COOKIES)
 # =========================================================
 
-# 1. కుకీస్ లో యూజర్ నేమ్ దొరికితే డైరెక్ట్ గా లాగిన్ చేసేస్తుంది
+# 1. సెషన్ స్టేట్ ని ముందే డిఫైన్ చేసుకోవాలి
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+# 2. ఒకవేళ లాగిన్ అవ్వకపోతే, కుకీస్ లో డేటా ఉందేమో చెక్ చేస్తుంది
 if not st.session_state.logged_in:
-    cookie_user = cookie_manager.get("saved_username")
+    cookie_user = controller.get("saved_username")
+    
+    # 3. కుకీస్ లో యూజర్ నేమ్ దొరికితే డైరెక్ట్ గా లాగిన్ చేసేస్తుంది
     if cookie_user:
         st.session_state.logged_in = True
         st.session_state.username = cookie_user
-        st.rerun() 
+        st.rerun() # వెంటనే పేజీ రిఫ్రెష్ అయి డ్యాష్‌బోర్డ్ లోకి వెళ్తుంది
 
 if not st.session_state.logged_in:
 
@@ -361,7 +373,7 @@ if not st.session_state.logged_in:
                     st.session_state.username = username
                     
                     # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
-                    cookie_manager.set("saved_username", username, max_age=31536000)
+                    controller.set("saved_username", username, max_age=31536000)
                     
                     st.success("Login Successful!")
                     time.sleep(1)
@@ -1680,7 +1692,7 @@ else:
             conn.commit()
             
         # Delete Permanent Cookie
-        cookie_manager.delete("saved_username")
+        controller.remove("saved_username")
 
         st.session_state.logged_in = False
         st.session_state.username = None 
