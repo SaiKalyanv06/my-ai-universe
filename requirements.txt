@@ -14,3 +14,4 @@ pandas
 youtube-transcript-api
 requests
 pytz
+extra-streamlit-components
