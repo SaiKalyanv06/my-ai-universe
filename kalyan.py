@@ -10,7 +10,7 @@
 # pip install streamlit-mic-recorder python-pptx python-docx
 # pip install reportlab pillow requests speechrecognition
 # pip install beautifulsoup4 lxml pandas youtube-transcript-api
-# pip install pytz streamlit-cookies-controller 
+# pip install pytz 
 
 # =========================================================
 # IMPORTS
@@ -36,7 +36,6 @@ from bs4 import BeautifulSoup
 import speech_recognition as sr
 import pandas as pd
 from youtube_transcript_api import YouTubeTranscriptApi
-from streamlit_cookies_controller import CookieController
 
 import tempfile
 import requests
@@ -61,9 +60,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Initialize Cookie Controller for Permanent Login
-controller = CookieController()
 
 # =========================================================
 # CUSTOM CSS (TWINKLING STARS & ORBITRON FONT)
@@ -170,16 +166,10 @@ try:
     api_key = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY"))
     cf_api_token = st.secrets.get("CLOUDFLARE_API_TOKEN", os.getenv("CLOUDFLARE_API_TOKEN", "")).strip().strip('"').strip("'")
     cf_account_id = st.secrets.get("CLOUDFLARE_ACCOUNT_ID", os.getenv("CLOUDFLARE_ACCOUNT_ID", "")).strip().strip('"').strip("'")
-    g_client_id = st.secrets.get("GOOGLE_CLIENT_ID", os.getenv("GOOGLE_CLIENT_ID", "")).strip().strip('"').strip("'")
-    g_client_secret = st.secrets.get("GOOGLE_CLIENT_SECRET", os.getenv("GOOGLE_CLIENT_SECRET", "")).strip().strip('"').strip("'")
-    redirect_url = st.secrets.get("REDIRECT_URI", os.getenv("REDIRECT_URI", "http://localhost:8501")).strip().strip('"').strip("'")
 except:
     api_key = os.getenv("GROQ_API_KEY")
     cf_api_token = os.getenv("CLOUDFLARE_API_TOKEN", "").strip().strip('"').strip("'")
     cf_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID", "").strip().strip('"').strip("'")
-    g_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip().strip('"').strip("'")
-    g_client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip().strip('"').strip("'")
-    redirect_url = os.getenv("REDIRECT_URI", "http://localhost:8501").strip().strip('"').strip("'")
 
 if not api_key:
     st.error("Please Add GROQ_API_KEY In .env File or Streamlit Cloud Secrets")
@@ -319,77 +309,10 @@ if "username" not in st.session_state:
     st.session_state.username = None
 
 # =========================================================
-# PURE & CLEAN GOOGLE LOGIN SYSTEM + AUTO LOGIN (PERMANENT)
+# PURE & CLEAN LOGIN SYSTEM (NO GOOGLE / NO COOKIES)
 # =========================================================
 
-# Initialize Cookie Controller for Permanent Login
-controller = CookieController()
-
-# 1. సెషన్ స్టేట్ ని ముందే డిఫైన్ చేసుకోవాలి
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = None
-
-# 2. ఒకవేళ లాగిన్ అవ్వకపోతే, కుకీస్ లో డేటా ఉందేమో చెక్ చేస్తుంది
 if not st.session_state.logged_in:
-    cookie_user = controller.get("saved_username")
-    
-    # 3. కుకీస్ లో యూజర్ నేమ్ దొరికితే డైరెక్ట్ గా లాగిన్ చేసేస్తుంది
-    if cookie_user:
-        st.session_state.logged_in = True
-        st.session_state.username = cookie_user
-        st.rerun() # వెంటనే పేజీ రిఫ్రెష్ అయి డ్యాష్‌బోర్డ్ లోకి వెళ్తుంది
-
-if not st.session_state.logged_in:
-
-    # FIX FOR STREAMLIT COMPONENT DELAY (Prevents Login Screen Flash on Restart)
-    if "app_started" not in st.session_state:
-        st.session_state.app_started = True
-        st.markdown("<br><br><h3 style='text-align: center; color: #6C63FF;'>🔄 Reconnecting to Universe...</h3>", unsafe_allow_html=True)
-        time.sleep(0.8) # Gives the browser enough time to send cookies safely
-        st.rerun()
-
-    # లేటెస్ట్ స్ట్రీమ్‌లిట్ వెర్షన్ ప్రకారం క్వెరీ పారామీటర్స్ రీడ్ చేయడం
-    if "code" in st.query_params:
-        auth_code = st.query_params["code"]
-        
-        if st.session_state.get("last_used_code") != auth_code:
-            st.session_state.last_used_code = auth_code
-            
-            with st.spinner("Logging into AI Universe... 🚀"):
-                try:
-                    res = requests.post("https://oauth2.googleapis.com/token", data={
-                        "code": auth_code,
-                        "client_id": g_client_id,
-                        "client_secret": g_client_secret,
-                        "redirect_uri": redirect_url,
-                        "grant_type": "authorization_code"
-                    }).json()
-
-                    if "access_token" in res:
-                        user_info = requests.get("https://www.googleapis.com/oauth2/v2/userinfo", headers={"Authorization": f"Bearer {res['access_token']}"}).json()
-                        
-                        st.session_state.username = user_info.get("name", "Google User")
-                        st.session_state.logged_in = True
-                        
-                        # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
-                        controller.set("saved_username", st.session_state.username, max_age=31536000)
-                        
-                        # పాత పారామీటర్స్ ని క్లియర్ చేయడం
-                        st.query_params.clear()
-                        st.rerun()
-                    else:
-                        if res.get("error") == "invalid_grant":
-                            st.query_params.clear()
-                            st.rerun()
-                        else:
-                            st.error(f"Login failed: {res}")
-                except Exception as e:
-                    st.error(f"Network Error: {e}")
-        else:
-            st.query_params.clear()
-            st.rerun()
 
     # --- NORMAL LOGIN UI ---
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -429,34 +352,11 @@ if not st.session_state.logged_in:
                     st.session_state.logged_in = True
                     st.session_state.username = username
                     
-                    # Set Permanent Cookie (Valid for 1 Year / 31536000 seconds)
-                    controller.set("saved_username", username, max_age=31536000)
-                    
                     st.success("Login Successful!")
                     time.sleep(1)
                     st.rerun()
                 else:
                     st.error("Invalid Username Or Password")
-        
-        # --- GOOGLE LOGIN BUTTON ---
-        st.markdown("---")
-        st.markdown("<p style='text-align: center; color: #A0A4B8;'>Or continue with</p>", unsafe_allow_html=True)
-        
-        if g_client_id and g_client_secret:
-            safe_redirect = urllib.parse.quote(redirect_url)
-            auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={g_client_id}&redirect_uri={safe_redirect}&response_type=code&scope=email%20profile&access_type=offline&prompt=consent"
-            
-            st.caption(f"App URI Configured: `{redirect_url}`")
-            
-            st.markdown(f'''
-            <a href="{auth_url}" target="_self" style="text-decoration: none;">
-                <button style="width: 100%; background-color: #DB4437; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: bold; font-size: 16px; cursor: pointer; transition: 0.3s;">
-                    🌐 Sign in with Google
-                </button>
-            </a>
-            ''', unsafe_allow_html=True)
-        else:
-            st.error("💡 No Google Keys Found! Add CLIENT_ID & CLIENT_SECRET to your .env file or Cloud Secrets.")
 
 # =========================================================
 # MAIN APP (DASHBOARD)
@@ -1768,9 +1668,6 @@ else:
             cursor.execute("DELETE FROM sessions WHERE token=?", (session_token,))
             conn.commit()
             
-        # Delete Permanent Cookie
-        controller.remove("saved_username")
-
         st.session_state.logged_in = False
         st.session_state.username = None 
             
